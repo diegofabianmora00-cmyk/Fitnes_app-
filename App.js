@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import { C } from './src/theme';
 import { Press, T } from './src/ui';
 import { StoreProvider, useStore } from './src/store';
@@ -11,6 +12,7 @@ import Routines from './src/screens/Routines';
 import Progress from './src/screens/Progress';
 import Settings from './src/screens/Settings';
 import Workout from './src/screens/Workout';
+import ProfileSetup from './src/screens/ProfileSetup';
 
 const TABS = [
   ['home', 'Inicio', 'home', Home],
@@ -20,11 +22,12 @@ const TABS = [
 ];
 
 function Shell() {
-  const { ready } = useStore();
+  const { ready, data } = useStore();
   const ins = useSafeAreaInsets();
+  const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold });
   const [tab, setTab] = useState('home');
   const [routine, setRoutine] = useState(null);
-  if (!ready) return <View style={{ flex: 1, backgroundColor: C.bg }} />;
+  if (!ready || !fontsLoaded) return <View style={{ flex: 1, backgroundColor: C.bg }} />;
   const Screen = TABS.find((t) => t[0] === tab)[3];
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -43,6 +46,7 @@ function Shell() {
         </View>
       </View>
       {routine && <Workout routine={routine} onClose={() => setRoutine(null)} />}
+      {!data.profile?.completed && <ProfileSetup />}
     </View>
   );
 }

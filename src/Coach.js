@@ -1,14 +1,42 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, View } from 'react-native';
 
-// ✏️ Apariencia del entrenador: cambia estos valores (o pídeme otro diseño).
 export const COACH = {
   name: 'Atlas',
-  body: '#171C22',   // color de la cabeza
-  edge: '#2C343F',   // borde
-  screen: '#0E1216', // pantalla de la cara
-  glow: '#7CF2C4',   // brillo y antena
-  eye: '#7CF2C4',    // ojos y boca
+  body: '#171C22',
+  edge: '#2C343F',
+  screen: '#0E1216',
+  glow: '#7CF2C4',
+  eye: '#7CF2C4',
+};
+
+const SIZES = {
+  lg: {
+    bodyW: 150, bodyH: 116, bodyR: 44, bodyBorder: 3,
+    screenW: 116, screenH: 76, screenR: 30, screenGap: 9,
+    eyeW: 13, eyeH: 20, eyeR: 7, eyeGap: 26,
+    eyeHappyH: 9, eyeHappyBorder: 4, eyeHappyR: 10,
+    mouthNeutralW: 34, mouthNeutralH: 16, mouthNeutralBorder: 4, mouthNeutralR: 18,
+    mouthHappyW: 44, mouthHappyH: 22,
+    alertW: 26, alertH: 4, alertBorder: 4,
+    antennaW: 10, antennaH: 10, neckW: 3, neckH: 12, neckBorder: 2,
+    baseW: 108, baseH: 24, baseMT: 4,
+    glowSize: 150, containerW: 150, containerH: 170,
+    lookRange: 3,
+  },
+  sm: {
+    bodyW: 76, bodyH: 58, bodyR: 24, bodyBorder: 2,
+    screenW: 58, screenH: 38, screenR: 16, screenGap: 5,
+    eyeW: 7, eyeH: 10, eyeR: 4, eyeGap: 13,
+    eyeHappyH: 5, eyeHappyBorder: 2, eyeHappyR: 5,
+    mouthNeutralW: 17, mouthNeutralH: 8, mouthNeutralBorder: 2, mouthNeutralR: 9,
+    mouthHappyW: 22, mouthHappyH: 11,
+    alertW: 14, alertH: 2, alertBorder: 2,
+    antennaW: 6, antennaH: 6, neckW: 2, neckH: 8, neckBorder: 1,
+    baseW: 70, baseH: 16, baseMT: 3,
+    glowSize: 76, containerW: 76, containerH: 88,
+    lookRange: 2,
+  },
 };
 
 const loop = (v, a, b, ms) => Animated.loop(Animated.sequence([
@@ -16,13 +44,8 @@ const loop = (v, a, b, ms) => Animated.loop(Animated.sequence([
   Animated.timing(v, { toValue: a, duration: ms, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
 ]));
 
-const MOUTH = {
-  neutral: { width: 22, height: 4, borderRadius: 2, backgroundColor: COACH.eye },
-  happy: { width: 26, height: 13, borderBottomLeftRadius: 13, borderBottomRightRadius: 13, borderWidth: 3, borderTopWidth: 0, borderColor: COACH.eye },
-  alert: { width: 26, height: 13, borderTopLeftRadius: 13, borderTopRightRadius: 13, borderWidth: 3, borderBottomWidth: 0, borderColor: COACH.eye, marginTop: 4 },
-};
-
-export default function Coach({ mood = 'neutral' }) {
+export default function Coach({ mood = 'neutral', size = 'lg' }) {
+  const s = SIZES[size] || SIZES.lg;
   const float = useRef(new Animated.Value(0)).current;
   const glow = useRef(new Animated.Value(0)).current;
   const look = useRef(new Animated.Value(0)).current;
@@ -50,26 +73,44 @@ export default function Coach({ mood = 'neutral' }) {
     Animated.spring(pop, { toValue: 1, friction: 4, useNativeDriver: true }).start();
   }, [mood]);
 
-  const eye = { width: 12, height: 18, borderRadius: 6, backgroundColor: COACH.eye, transform: [{ scaleY: blink }] };
+  const happy = mood === 'happy';
+  const alert = mood === 'alert';
+
   return (
-    <View style={{ width: 150, height: 170, alignItems: 'center', justifyContent: 'center' }}>
+    <View style={{ width: s.containerW, height: s.containerH, alignItems: 'center', justifyContent: 'center' }}>
       <Animated.View style={{
-        position: 'absolute', width: 150, height: 150, borderRadius: 75, backgroundColor: COACH.glow,
+        position: 'absolute', width: s.glowSize, height: s.glowSize, borderRadius: s.glowSize / 2, backgroundColor: COACH.glow,
         opacity: glow.interpolate({ inputRange: [0, 1], outputRange: [0.05, 0.14] }),
         transform: [{ scale: glow.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.08] }) }],
       }} />
       <Animated.View style={{ alignItems: 'center', transform: [{ translateY: float.interpolate({ inputRange: [0, 1], outputRange: [4, -6] }) }, { scale: pop }] }}>
-        <Animated.View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: COACH.glow, opacity: glow.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) }} />
-        <View style={{ width: 3, height: 12, backgroundColor: COACH.edge }} />
-        <View style={{ width: 108, height: 86, borderRadius: 32, backgroundColor: COACH.body, borderWidth: 2, borderColor: COACH.edge, alignItems: 'center', justifyContent: 'center' }}>
-          <View style={{ width: 86, height: 58, borderRadius: 22, backgroundColor: COACH.screen, alignItems: 'center', justifyContent: 'center' }}>
-            <Animated.View style={{ flexDirection: 'row', gap: 20, transform: [{ translateX: look.interpolate({ inputRange: [-1, 1], outputRange: [-3, 3] }) }] }}>
-              <Animated.View style={eye} /><Animated.View style={eye} />
+        <Animated.View style={{ width: s.antennaW, height: s.antennaH, borderRadius: s.antennaW / 2, backgroundColor: COACH.glow, opacity: glow.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) }} />
+        <View style={{ width: s.neckW, height: s.neckH, backgroundColor: COACH.edge, borderWidth: s.neckBorder, borderColor: COACH.edge }} />
+        <View style={{ width: s.bodyW, height: s.bodyH, borderRadius: s.bodyR, backgroundColor: COACH.body, borderWidth: s.bodyBorder, borderColor: COACH.edge, alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ width: s.screenW, height: s.screenH, borderRadius: s.screenR, backgroundColor: COACH.screen, alignItems: 'center', justifyContent: 'center', gap: s.screenGap }}>
+            <Animated.View style={{ flexDirection: 'row', gap: s.eyeGap, transform: [{ translateX: look.interpolate({ inputRange: [-1, 1], outputRange: [-s.lookRange, s.lookRange] }) }] }}>
+              {happy ? (
+                <>
+                  <View style={{ width: s.eyeW, height: s.eyeHappyH, borderTopLeftRadius: s.eyeHappyR, borderTopRightRadius: s.eyeHappyR, borderWidth: s.eyeHappyBorder, borderBottomWidth: 0, borderColor: COACH.eye, backgroundColor: 'transparent' }} />
+                  <View style={{ width: s.eyeW, height: s.eyeHappyH, borderTopLeftRadius: s.eyeHappyR, borderTopRightRadius: s.eyeHappyR, borderWidth: s.eyeHappyBorder, borderBottomWidth: 0, borderColor: COACH.eye, backgroundColor: 'transparent' }} />
+                </>
+              ) : (
+                <>
+                  <Animated.View style={{ width: s.eyeW, height: s.eyeH, borderRadius: s.eyeR, backgroundColor: COACH.eye, transform: [{ scaleY: blink }] }} />
+                  <Animated.View style={{ width: s.eyeW, height: s.eyeH, borderRadius: s.eyeR, backgroundColor: COACH.eye, transform: [{ scaleY: blink }] }} />
+                </>
+              )}
             </Animated.View>
-            <View style={[{ marginTop: 8 }, MOUTH[mood] || MOUTH.neutral]} />
+            {alert ? (
+              <View style={{ width: s.alertW, height: s.alertH, borderRadius: s.alertBorder / 2, backgroundColor: COACH.eye, marginTop: 4 }} />
+            ) : happy ? (
+              <View style={{ width: s.mouthHappyW, height: s.mouthHappyH, borderBottomLeftRadius: s.mouthHappyW / 2, borderBottomRightRadius: s.mouthHappyW / 2, borderWidth: s.mouthNeutralBorder, borderTopWidth: 0, borderColor: COACH.eye, backgroundColor: 'transparent' }} />
+            ) : (
+              <View style={{ width: s.mouthNeutralW, height: s.mouthNeutralH, borderBottomLeftRadius: s.mouthNeutralR, borderBottomRightRadius: s.mouthNeutralR, borderWidth: s.mouthNeutralBorder, borderTopWidth: 0, borderColor: COACH.eye, backgroundColor: 'transparent' }} />
+            )}
           </View>
         </View>
-        <View style={{ width: 70, height: 24, marginTop: 4, borderTopLeftRadius: 14, borderTopRightRadius: 14, borderBottomLeftRadius: 8, borderBottomRightRadius: 8, backgroundColor: COACH.body, borderWidth: 2, borderColor: COACH.edge }} />
+        <View style={{ width: s.baseW, height: s.baseH, marginTop: s.baseMT, borderTopLeftRadius: s.baseW / 4, borderTopRightRadius: s.baseW / 4, borderBottomLeftRadius: 8, borderBottomRightRadius: 8, backgroundColor: COACH.body, borderWidth: s.bodyBorder, borderColor: COACH.edge }} />
       </Animated.View>
     </View>
   );
