@@ -13,6 +13,7 @@ import { addLoadStep, exerciseReview, GOALS, labelOf, LEVELS, newRecords, recomm
 import Coach from '../Coach';
 import RuleInfo from '../RuleInfo';
 import SessionReview from '../SessionReview';
+import { calculateFacts, getCoachMessage } from '../coachMemory';
 
 const mm = (s) => `${Math.floor(s / 60)}:${String(Math.abs(Math.floor(s)) % 60).padStart(2, '0')}`;
 
@@ -138,6 +139,69 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
   const [saved, setSaved] = useState(null);
   const [reg, setReg] = useState({ r: '', w: '', rir: null });
   const [regConfirmed, setRegConfirmed] = useState({ r: false, w: false, rir: false });
+
+  const [recCoachMsg, setRecCoachMsg] = useState(null);
+  const recCoachIdRef = useRef(null);
+  useEffect(() => {
+    if (phase !== 'recommend') return;
+    try {
+      const facts = calculateFacts(data);
+      const tone = data.profile?.tone || 'tranquilo';
+      const recent = data.coachMemory || [];
+      const res = getCoachMessage('antes_ejercicio', facts, tone, recent);
+      if (recCoachIdRef.current !== res.id) {
+        recCoachIdRef.current = res.id;
+        setRecCoachMsg(res.texto);
+        update(d => {
+          const mem = [...(d.coachMemory || []), res.id].slice(-8);
+          if (d.coachMemory && d.coachMemory[d.coachMemory.length - 1] === res.id) return d;
+          return { ...d, coachMemory: mem };
+        });
+      }
+    } catch (e) {}
+  }, [phase, exIndex, data.profile?.tone]);
+
+  const [regCoachMsg, setRegCoachMsg] = useState(null);
+  const regCoachIdRef = useRef(null);
+  useEffect(() => {
+    if (phase !== 'register') return;
+    try {
+      const facts = calculateFacts(data);
+      const tone = data.profile?.tone || 'tranquilo';
+      const recent = data.coachMemory || [];
+      const res = getCoachMessage('tras_serie', facts, tone, recent);
+      if (regCoachIdRef.current !== res.id) {
+        regCoachIdRef.current = res.id;
+        setRegCoachMsg(res.texto);
+        update(d => {
+          const mem = [...(d.coachMemory || []), res.id].slice(-8);
+          if (d.coachMemory && d.coachMemory[d.coachMemory.length - 1] === res.id) return d;
+          return { ...d, coachMemory: mem };
+        });
+      }
+    } catch (e) {}
+  }, [phase, setIndex, data.profile?.tone]);
+
+  const [sumCoachMsg, setSumCoachMsg] = useState(null);
+  const sumCoachIdRef = useRef(null);
+  useEffect(() => {
+    if (phase !== 'summary') return;
+    try {
+      const facts = calculateFacts(data);
+      const tone = data.profile?.tone || 'tranquilo';
+      const recent = data.coachMemory || [];
+      const res = getCoachMessage('resumen_ejercicio', facts, tone, recent);
+      if (sumCoachIdRef.current !== res.id) {
+        sumCoachIdRef.current = res.id;
+        setSumCoachMsg(res.texto);
+        update(d => {
+          const mem = [...(d.coachMemory || []), res.id].slice(-8);
+          if (d.coachMemory && d.coachMemory[d.coachMemory.length - 1] === res.id) return d;
+          return { ...d, coachMemory: mem };
+        });
+      }
+    } catch (e) {}
+  }, [phase, exIndex, data.profile?.tone]);
 
   useEffect(() => { Animated.spring(y, { toValue: 0, friction: 9, tension: 50, useNativeDriver: true }).start(); }, []);
   useEffect(() => {
@@ -439,7 +503,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
     const levelLabel = labelOf(LEVELS, data.profile && data.profile.level);
     const coachText = insufficient
       ? `No tengo registros previos de este ejercicio en tu historial (0 sesiones). Como tu objetivo es ${goalLabel.toLowerCase()} y tu nivel es ${levelLabel.toLowerCase()}, la información que tengo no es suficiente como para sugerirte un peso. Elige un peso libre con el que puedas mantener RIR 2-3.`
-      : `Basado en tu historial (${rec.sessions} ${rec.sessions === 1 ? 'sesión' : 'sesiones'}) y tu objetivo de ${goalLabel.toLowerCase()} (${levelLabel.toLowerCase()}), te sugiero ${bodyweight ? 'peso corporal' : `${toU(rec.weightKg, u)} ${u}`} para ${rec.targetReps} reps con RIR ${rirTarget}.`;
+      : (recCoachMsg || `Basado en tu historial (${rec.sessions} ${rec.sessions === 1 ? 'sesión' : 'sesiones'}) y tu objetivo de ${goalLabel.toLowerCase()} (${levelLabel.toLowerCase()}), te sugiero ${bodyweight ? 'peso corporal' : `${toU(rec.weightKg, u)} ${u}`} para ${rec.targetReps} reps con RIR ${rirTarget}.`);
 
     return (
       <Animated.View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, transform: [{ translateY: y }] }}>
@@ -590,9 +654,9 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
     const happy = repsNum >= targetReps && (rir === null || (rir >= 1 && rir <= 3));
     const alertMood = rir === 0 && repsNum < targetReps;
     const mood = alertMood ? 'alert' : (happy ? 'happy' : 'neutral');
-    const bubble = alertMood
+    const bubble = regCoachMsg || (alertMood
       ? 'Llegaste al fallo. Mantenemos el peso y buscamos margen.'
-      : (happy ? `${rir ?? 2} repeticiones de reserva. Justo lo recomendado.` : 'Anota lo que hiciste para ajustar la próxima.');
+      : (happy ? `${rir ?? 2} repeticiones de reserva. Justo lo recomendado.` : 'Anota lo que hiciste para ajustar la próxima.'));
     return (
       <Animated.View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, transform: [{ translateY: y }] }}>
         <LinearGradient colors={[C.bgTop, C.bgBot]} locations={[0, 0.38]} style={{ flex: 1, ...commonPad }}>
@@ -734,7 +798,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
       const kcal = met * bodyKg * (sec / 3600);
       return `≈ ${Math.round(kcal)} kcal estimadas (MET × peso × horas).`;
     })();
-    const finalText = sc && sc.score >= 75 ? 'Cumpliste con margen.' : (sc && sc.score >= 60 ? 'Aceptable.' : 'A revisar el ritmo.');
+    const finalText = sumCoachMsg || (sc && sc.score >= 75 ? 'Cumpliste con margen.' : (sc && sc.score >= 60 ? 'Aceptable.' : 'A revisar el ritmo.'));
     const isLast = exIndex === log.length - 1;
     return (
       <Animated.View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, transform: [{ translateY: y }] }}>

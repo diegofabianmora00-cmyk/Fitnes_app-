@@ -1,16 +1,42 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { C } from '../theme';
 import { Btn, Card, FadeIn, H, Press, T } from '../ui';
 import Coach, { COACH } from '../Coach';
 import { useStore } from '../store';
 import { coachMessage, weekSummary } from '../recommend';
+import { calculateFacts, getCoachMessage } from '../coachMemory';
 import RuleInfo from '../RuleInfo';
 
-export default function Home({ go, start }) {
-  const { data } = useStore();
+export default function Home({ go, start, isActive }) {
+  const { data, update } = useStore();
   const [why, setWhy] = useState(null);
-  const msg = coachMessage(data);
+  const [coachMsg, setCoachMsg] = useState(null);
+  const lastIdRef = useRef(null);
+
+  useEffect(() => {
+    if (isActive === false) return;
+    try {
+      const facts = calculateFacts(data);
+      const tone = data.profile?.tone || 'tranquilo';
+      const recent = data.coachMemory || [];
+      const ctx = facts.daysSinceLast >= 3 ? 'regreso_ausencia' : 'inicio';
+      const res = getCoachMessage(ctx, facts, tone, recent);
+      const mood = facts.daysSinceLast >= 3 ? 'alert' : (facts.improvedExercises?.length ? 'happy' : 'neutral');
+      if (lastIdRef.current !== res.id) {
+        lastIdRef.current = res.id;
+        setCoachMsg({ mood, text: res.texto, rule: null, rules: [] });
+        update(d => {
+          const mem = [...(d.coachMemory || []), res.id].slice(-8);
+          if (d.coachMemory && d.coachMemory[d.coachMemory.length - 1] === res.id) return d;
+          return { ...d, coachMemory: mem };
+        });
+      }
+    } catch (e) {}
+  }, [isActive, data.profile?.tone]);
+
+  const fallbackMsg = coachMessage(data);
+  const msg = coachMsg || fallbackMsg;
   const summary = weekSummary(data);
   const next = data.routines.length ? data.routines[data.workouts.length % data.routines.length] : null;
 

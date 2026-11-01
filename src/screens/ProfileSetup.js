@@ -9,9 +9,10 @@ import {
   AMBITIONS, GOALS, LEVELS, REST_STYLES, SEXES,
   frequencyAdvice, labelOf, repRangeFor, restFor,
 } from '../recommend';
+import { COACH_TONES } from '../coachMemory';
 
 const mm = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-const TOTAL = 7;
+const TOTAL = 8;
 
 function Option({ selected, onPress, icon, title, desc }) {
   return (
@@ -85,6 +86,7 @@ export default function ProfileSetup({ mode = 'setup', onDone }) {
       age: p.age ? String(p.age) : '',
       sex: p.sex || 'hombre',
       restStyle: p.restStyle || 'equilibrado',
+      tone: p.tone || 'tranquilo',
     };
   });
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -127,6 +129,7 @@ export default function ProfileSetup({ mode = 'setup', onDone }) {
         age: Number(form.age),
         sex: form.sex,
         restStyle: form.restStyle,
+        tone: form.tone,
         completed: true,
         updatedAt: Date.now(),
       },
@@ -134,7 +137,7 @@ export default function ProfileSetup({ mode = 'setup', onDone }) {
     if (onDone) onDone();
   };
 
-  const title = ['¿Cuál es tu objetivo?', '¿Cuánto quieres progresar?', 'Tu experiencia', '¿Cuántos días por semana?', 'Tus datos', 'Descanso entre series', 'Todo listo'][step];
+  const title = ['¿Cuál es tu objetivo?', '¿Cuánto quieres progresar?', 'Tu experiencia', '¿Cuántos días por semana?', 'Tus datos', 'Descanso entre series', 'Tono de Atlas', 'Todo listo'][step];
   const subtitle = [
     'Atlas ajustará el peso, las repeticiones y el descanso a lo que buscas.',
     'Marca cuándo debe subirte el peso.',
@@ -142,6 +145,7 @@ export default function ProfileSetup({ mode = 'setup', onDone }) {
     'La constancia importa más que un plan perfecto.',
     'Se usan para las recomendaciones y para estimar las calorías.',
     'Tu preferencia ajusta el descanso sin salir de los rangos seguros.',
+    'Elige cómo te habla Atlas en cada notificación y consejo.',
     'Revisa lo que Atlas usará. Puedes cambiarlo en Ajustes.',
   ][step];
 
@@ -255,6 +259,21 @@ export default function ProfileSetup({ mode = 'setup', onDone }) {
 
             {step === 6 && (
               <View>
+                {COACH_TONES.map((t) => (
+                  <Option
+                    key={t.id}
+                    selected={form.tone === t.id}
+                    onPress={() => set('tone', t.id)}
+                    icon="chatbubble-outline"
+                    title={t.label}
+                    desc={t.desc}
+                  />
+                ))}
+              </View>
+            )}
+
+            {step === 7 && (
+              <View>
                 <Card style={{ marginTop: 16 }}>
                   <Row label="Objetivo" value={labelOf(GOALS, form.goal)} />
                   <Row label="Progresión" value={labelOf(AMBITIONS, form.ambition)} />
@@ -264,6 +283,7 @@ export default function ProfileSetup({ mode = 'setup', onDone }) {
                   <Row label="Estatura" value={`${form.height} cm`} />
                   <Row label="Edad" value={`${form.age} años`} />
                   <Row label="Descanso" value={labelOf(REST_STYLES, form.restStyle)} />
+                  <Row label="Tono de Atlas" value={labelOf(COACH_TONES, form.tone) || form.tone} />
                 </Card>
                 <Card style={{ marginTop: 12 }}>
                   <T mute style={{ fontSize: 12, letterSpacing: 1, marginBottom: 4 }}>PLAN QUE USARÁ ATLAS</T>

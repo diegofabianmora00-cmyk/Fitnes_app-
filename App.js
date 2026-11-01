@@ -110,7 +110,7 @@ function Shell() {
         >
           {TABS.map(([id, , , Comp]) => (
             <View key={id} style={{ width: W, flex: 1 }}>
-              <Comp go={setTab} start={setRoutine} />
+              <Comp go={setTab} start={setRoutine} isActive={tab === id} />
             </View>
           ))}
         </ScrollView>

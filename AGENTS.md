@@ -35,8 +35,10 @@ no los crees ni los edites.
   guardado de la sesión, PR y resumen.
 - src/screens/Progress.js: estadísticas, gráfica de barras por ejercicio, historial.
 - src/screens/Settings.js: kg/lb, editar perfil, exportar, borrar datos.
+- src/coachMemory.js: cerebro de los mensajes de Atlas (lógica pura y plantillas).
 - jest.config.js: preset 'jest-expo' para pruebas.
 - src/__tests__/recommend.test.js: pruebas unitarias del motor puro (jest).
+- src/__tests__/coachMemory.test.js: pruebas unitarias del cerebro de mensajes de Atlas (jest).
 - docs/decisiones.md: reglas del motor (progresión, estancamiento, descanso, PR, puntaje).
   Léelo ANTES de tocar recommend.js o el puntaje/PR de Workout.js y SessionReview.js.
 - docs/diseno-entrenamiento.md: diseño visual del flujo de entrenamiento. Léelo solo si
@@ -53,7 +55,8 @@ Claves de AsyncStorage:
   se borra al terminar o descartar.
 data = { schemaVersion: 2, unit,
 profile: { goal, ambition, level, daysPerWeek, weightKg, heightCm, age, sex,
-  restStyle, completed, updatedAt },
+  restStyle, tone, completed, updatedAt },
+coachMemory: [string], // últimos 8 ids de mensajes mostrados por Atlas
 routines: [{ id, name, exercises: [{ id, name, group, equipment, sets, reps }] }],
 workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName,
   prs: [{ exId, name, kind, weightKg, reps }],
@@ -95,6 +98,7 @@ workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName,
   actualiza el Estado en 1 o 2 líneas (no es un historial: eso está en git).
 - Al terminar: tabla tarea | archivos modificados | estado (hecho / parcial / no hecho),
   y la lista de archivos nuevos y modificados para el commit.
+- si algo que se este pidiendo es muy similar a algo que se esta pidiendo otra vez, comunicalo
 
 ## Estado
 - Hecho: app base, base de ejercicios, perfil, motor de recomendación, entrenamiento

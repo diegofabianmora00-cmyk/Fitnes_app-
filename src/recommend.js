@@ -1,4 +1,5 @@
 import { exerciseById } from './exercises';
+import { calculateFacts, getCoachMessage } from './coachMemory';
 
 const KG = 2.20462;
 const LOAD_STEP = { kg: 2.5, lb: 5 };
@@ -767,68 +768,84 @@ export function weekSummary(data = {}) {
 }
 
 export function coachMessage(data = {}) {
-  const ws = [...(data.workouts || [])].sort((a, b) => (b.date || 0) - (a.date || 0));
-  const unit = data.unit || 'kg';
-  if (!ws.length) {
+  try {
+    const facts = calculateFacts(data);
+    const tone = data.profile?.tone || 'tranquilo';
+    const recent = data.coachMemory || [];
+    const ctx = facts.daysSinceLast >= 3 ? 'regreso_ausencia' : 'inicio';
+    const res = getCoachMessage(ctx, facts, tone, recent);
+    const mood = facts.daysSinceLast >= 3 ? 'alert' : (facts.improvedExercises?.length ? 'happy' : 'neutral');
     return {
-      mood: 'happy',
-      text: 'Hola, soy Atlas. Completaste tu perfil: registra tu primer entrenamiento y empiezo a seguir tu progreso.',
+      mood,
+      text: res.texto,
       rule: null,
       rules: [],
+      id: res.id,
     };
-  }
-  const days = Math.floor((Date.now() - (ws[0].date || 0)) / 864e5);
-  if (days >= 7) {
-    return {
-      mood: 'neutral',
-      text: `Hace ${days} días que no entrenas. Retomemos con calma: una sesión ligera es suficiente.`,
-      rule: RULES.frequency,
-      rules: [RULES.frequency],
-    };
-  }
+  } catch (e) {
+    const ws = [...(data.workouts || [])].sort((a, b) => (b.date || 0) - (a.date || 0));
+    const unit = data.unit || 'kg';
+    if (!ws.length) {
+      return {
+        mood: 'happy',
+        text: 'Hola, soy Atlas. Completaste tu perfil: registra tu primer entrenamiento y empiezo a seguir tu progreso.',
+        rule: null,
+        rules: [],
+      };
+    }
+    const days = Math.floor((Date.now() - (ws[0].date || 0)) / 864e5);
+    if (days >= 7) {
+      return {
+        mood: 'neutral',
+        text: `Hace ${days} días que no entrenas. Retomemos con calma: una sesión ligera es suficiente.`,
+        rule: RULES.frequency,
+        rules: [RULES.frequency],
+      };
+    }
 
-  const pr = (ws[0].prs || [])[0];
-  if (pr && Date.now() - (ws[0].date || 0) < 3 * 864e5) {
-    const mark = pr.weightKg > 0 ? `${toDisplay(pr.weightKg, unit)} ${unit} × ${pr.reps}` : `${pr.reps} reps`;
-    return {
-      mood: 'happy',
-      text: `¡Nuevo récord en ${pr.name}: ${mark}! Ya quedó guardado.`,
-      rule: RULES.pr,
-      rules: [RULES.pr],
-    };
-  }
+    const pr = (ws[0].prs || [])[0];
+    if (pr && Date.now() - (ws[0].date || 0) < 3 * 864e5) {
+      const mark = pr.weightKg > 0 ? `${toDisplay(pr.weightKg, unit)} ${unit} × ${pr.reps}` : `${pr.reps} reps`;
+      return {
+        mood: 'happy',
+        text: `¡Nuevo récord en ${pr.name}: ${mark}! Ya quedó guardado.`,
+        rule: RULES.pr,
+        rules: [RULES.pr],
+      };
+    }
 
-  const routineEx = (data.routines || []).flatMap((r) => r.exercises || []);
-  const exs = (ws[0].exercises || []).map((e) => {
-    const r = routineEx.find((x) => x.id === e.exId);
-    return r
-      ? { ...r, reps: e.targetReps ?? e.target ?? r.reps }
-      : { id: e.exId, name: e.name, reps: e.targetReps ?? e.target ?? 8, group: '', type: 'compuesto' };
-  });
-  const recs = exs.map((ex) => recommendFor(data, ex));
-  const stall = recs.find((r) => r.action === 'stall');
-  if (stall) return { mood: 'alert', text: stall.text, rule: stall.primaryRule, rules: uniqRules(stall.rules) };
-  const up = recs.find((r) => r.action === 'up');
-  if (up) return { mood: 'happy', text: up.text, rule: up.primaryRule, rules: uniqRules(up.rules) };
-  const insight = recs.find((r) => r.restInsight);
-  if (insight) {
-    return {
-      mood: 'neutral',
-      text: insight.restInsight.text,
-      rule: RULES.restFeedback,
-      rules: uniqRules([RULES.restFeedback, ...insight.rules]),
-    };
+    const routineEx = (data.routines || []).flatMap((r) => r.exercises || []);
+    const exs = (ws[0].exercises || []).map((e) => {
+      const r = routineEx.find((x) => x.id === e.exId);
+      return r
+        ? { ...r, reps: e.targetReps ?? e.target ?? r.reps }
+        : { id: e.exId, name: e.name, reps: e.targetReps ?? e.target ?? 8, group: '', type: 'compuesto' };
+    });
+    const recs = exs.map((ex) => recommendFor(data, ex));
+    const stall = recs.find((r) => r.action === 'stall');
+    if (stall) return { mood: 'alert', text: stall.text, rule: stall.primaryRule, rules: uniqRules(stall.rules) };
+    const up = recs.find((r) => r.action === 'up');
+    if (up) return { mood: 'happy', text: up.text, rule: up.primaryRule, rules: uniqRules(up.rules) };
+    const insight = recs.find((r) => r.restInsight);
+    if (insight) {
+      return {
+        mood: 'neutral',
+        text: insight.restInsight.text,
+        rule: RULES.restFeedback,
+        rules: uniqRules([RULES.restFeedback, ...insight.rules]),
+      };
+    }
+    const week = weekSummary(data);
+    if (!week.ok) {
+      return {
+        mood: 'neutral',
+        text: `Esta semana llevas ${week.sessions} de ${week.target} entrenos. La constancia manda.`,
+        rule: RULES.frequency,
+        rules: [RULES.frequency],
+      };
+    }
+    const keep = recs.find((r) => r.action === 'maintain');
+    if (keep) return { mood: 'neutral', text: keep.text, rule: keep.primaryRule, rules: uniqRules(keep.rules) };
+    return { mood: 'happy', text: 'Buen trabajo. Sigue así.', rule: null, rules: [] };
   }
-  const week = weekSummary(data);
-  if (!week.ok) {
-    return {
-      mood: 'neutral',
-      text: `Esta semana llevas ${week.sessions} de ${week.target} entrenos. La constancia manda.`,
-      rule: RULES.frequency,
-      rules: [RULES.frequency],
-    };
-  }
-  const keep = recs.find((r) => r.action === 'maintain');
-  if (keep) return { mood: 'neutral', text: keep.text, rule: keep.primaryRule, rules: uniqRules(keep.rules) };
-  return { mood: 'happy', text: 'Buen trabajo. Sigue así.', rule: null, rules: [] };
 }

@@ -6,6 +6,7 @@ import { Btn, Card, FadeIn, H, Press, T } from '../ui';
 import { KEYS, migrate, toU, useStore } from '../store';
 import { DEV_SEEDS } from '../devSeeds';
 import { GOALS, LEVELS, REST_STYLES, labelOf } from '../recommend';
+import { COACH_TONES } from '../coachMemory';
 import ProfileSetup from './ProfileSetup';
 
 export default function Settings() {
@@ -50,6 +51,30 @@ export default function Settings() {
                 <T style={{ fontWeight: '700', color: data.unit === u ? '#06120D' : C.mute }}>{u}</T>
               </Press>
             ))}
+          </View>
+        </Card>
+      </FadeIn>
+      <FadeIn delay={200}>
+        <Card style={{ marginTop: 14 }}>
+          <T mute style={{ marginBottom: 12 }}>Tono de Atlas</T>
+          <View style={{ gap: 8 }}>
+            {COACH_TONES.map((t) => {
+              const on = (p.tone || 'tranquilo') === t.id;
+              return (
+                <Press
+                  key={t.id}
+                  onPress={() => update((d) => ({ ...d, profile: { ...d.profile, tone: t.id } }))}
+                  style={{
+                    padding: 12, borderRadius: 14,
+                    backgroundColor: on ? C.accentDim : C.card2,
+                    borderWidth: 1, borderColor: on ? C.accent : C.line,
+                  }}
+                >
+                  <T style={{ fontWeight: '700', color: on ? C.accent : C.text }}>{t.label}</T>
+                  <T mute style={{ fontSize: 12, marginTop: 2 }}>Ej: "{t.example}"</T>
+                </Press>
+              );
+            })}
           </View>
         </Card>
       </FadeIn>

@@ -39,6 +39,7 @@ export const PROFILE_DEFAULT = {
   age: 30,
   sex: 'hombre',
   restStyle: 'equilibrado',
+  tone: 'tranquilo',
   updatedAt: null,
 };
 
@@ -48,6 +49,7 @@ const seed = {
   schemaVersion: 2,
   unit: 'kg',
   profile: { ...PROFILE_DEFAULT },
+  coachMemory: [],
   routines: [{ id: 'r1', name: 'Empuje', exercises: [
     { id: 'press-banca', name: 'Press de banca', group: 'Pecho', equipment: 'Barra', sets: 3, reps: 8 },
     { id: 'press-militar', name: 'Press militar', group: 'Hombros', equipment: 'Barra', sets: 3, reps: 10 },
@@ -82,7 +84,12 @@ const normalizeWorkoutExercise = (e) => {
 };
 
 export const migrate = (raw) => {
-  const base = { ...seed, ...raw, profile: { ...PROFILE_DEFAULT, ...(raw.profile || {}) } };
+  const base = {
+    ...seed,
+    ...raw,
+    profile: { ...PROFILE_DEFAULT, tone: raw.profile?.tone || 'tranquilo', ...(raw.profile || {}) },
+    coachMemory: Array.isArray(raw.coachMemory) ? raw.coachMemory : (Array.isArray(raw.profile?.coachMemory) ? raw.profile.coachMemory : []),
+  };
   const routines = (base.routines || []).map((r) => ({
     ...r,
     exercises: (r.exercises || []).map(normalizeExercise),
