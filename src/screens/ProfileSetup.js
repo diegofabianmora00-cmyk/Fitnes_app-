@@ -140,7 +140,7 @@ export default function ProfileSetup({ mode = 'setup', onDone }) {
     'Marca cuándo debe subirte el peso.',
     'Así sabemos con qué cargas empezar y cuánto exigirte.',
     'La constancia importa más que un plan perfecto.',
-    'Se usan para las recomendaciones y, más adelante, para las calorías.',
+    'Se usan para las recomendaciones y para estimar las calorías.',
     'Tu preferencia ajusta el descanso sin salir de los rangos seguros.',
     'Revisa lo que Atlas usará. Puedes cambiarlo en Ajustes.',
   ][step];

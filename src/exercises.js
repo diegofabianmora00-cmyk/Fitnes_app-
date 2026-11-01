@@ -122,3 +122,26 @@ export function filterExercises(query = '', group = 'Todos') {
 
 // kcal por hora ≈ MET × peso corporal (kg). El MET ya incluye los descansos.
 export const kcalPerHour = (met, bodyKg) => met * bodyKg;
+
+// kcal estimadas de una sesión. Usa el tiempo real de cada ejercicio (del primer
+// inicio al último fin de sus series) y el MET de su categoría del Compendium.
+// Si la sesión no tiene horarios, usa la duración total con el MET de pesas.
+export function workoutKcal(workout = {}, bodyKg = 0) {
+  const kg = Number(bodyKg) || 0;
+  if (!(kg > 0)) return 0;
+  let total = 0;
+  let timed = 0;
+  for (const e of workout.exercises || []) {
+    const db = exerciseById(e.exId);
+    const met = Number(e.met) || (db ? db.met : METS.weights.met);
+    const starts = (e.sets || []).map((s) => Number(s.startedAt)).filter((n) => n > 0);
+    const ends = (e.sets || []).map((s) => Number(s.endedAt)).filter((n) => n > 0);
+    if (!starts.length || !ends.length) continue;
+    const sec = Math.max(0, (Math.max(...ends) - Math.min(...starts)) / 1000);
+    if (!sec) continue;
+    total += kcalPerHour(met, kg) * (sec / 3600);
+    timed += sec;
+  }
+  if (!timed) total = kcalPerHour(METS.weights.met, kg) * ((Number(workout.durationSec) || 0) / 3600);
+  return Math.round(total);
+}

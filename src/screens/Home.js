@@ -24,7 +24,7 @@ export default function Home({ go, start }) {
 
   return (
     <>
-    <ScrollView contentContainerStyle={{ padding: 22, paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
+    <ScrollView style={{ width: '100%' }} contentContainerStyle={{ padding: 22, paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
       <FadeIn>
         <T mute style={{ textTransform: 'capitalize' }}>{date}</T>
         <H style={{ marginTop: 2 }}>Hoy toca entrenar</H>
@@ -40,6 +40,7 @@ export default function Home({ go, start }) {
           {!!(msg.rules && msg.rules.length) && (
             <Press
               onPress={() => setWhy(msg.rules)}
+              hitSlop={12}
               style={{ marginTop: 10, alignSelf: 'flex-start' }}
             >
               <T style={{ fontSize: 12, color: C.accent, fontWeight: '600' }}>¿Por qué digo esto?</T>

@@ -111,5 +111,6 @@ workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName,
   Ring memoizado fuera del componente y cronómetro cada 1 s con Date.now(), series con
   campos sin confirmar ignoradas por motor/PR/puntaje, y pesos redondeados en la unidad
   del usuario (kg 2,5 / lb 5) con PR por tolerancia de 0,01 kg.
-- En curso: resto de los fallos conocidos (pestañas montadas, botones de 48 px y otros).
-- Siguiente: paso 5 calorías visibles, paso 6 gráficas de progreso y estancados.
+- Hecho: pestañas montadas correctamente en App.js, objetivos táctiles mínimos de 48px y hitSlop aplicados.
+- Hecho: paso 5 (calorías visibles en resumen de sesión y progreso mediante Compendium 2024 / METs) y paso 6 (gráficas de progreso filtradas por series confirmadas, indicador de estancamiento y lista de ejercicios por revisar).
+- Estado: ¡Todos los pasos y fallos completados y verificados con pruebas unitarias y compilación!

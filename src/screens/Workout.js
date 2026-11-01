@@ -370,7 +370,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
     workout.score = review;
     update((d) => ({ ...d, workouts: [workout, ...d.workouts] }));
     AsyncStorage.removeItem(DRAFT_KEY).catch(()=>{});
-    setSaved({ review, records });
+    setSaved({ review, records, workout });
     setPhase('review');
   };
 
@@ -433,6 +433,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
           visible={!!saved}
           review={saved ? saved.review : null}
           records={saved ? saved.records : []}
+          workout={saved ? saved.workout : null}
           onClose={closeAll}
         />
       </View>

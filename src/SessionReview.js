@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { C } from './theme';
 import { Btn, Card, Press, T } from './ui';
 import { RULES } from './recommend';
+import { workoutKcal } from './exercises';
 import { toU, useStore } from './store';
 import Coach from './Coach';
 
@@ -81,13 +82,15 @@ function Mark({ item, unit }) {
   );
 }
 
-export default function SessionReview({ visible, review, records = [], onClose }) {
+export default function SessionReview({ visible, review, records = [], workout = null, onClose }) {
   const { data } = useStore();
   const ins = useSafeAreaInsets();
   const [step, setStep] = useState(records.length ? 0 : 1);
   const [showScore, setShowScore] = useState(false);
   const [showRest, setShowRest] = useState(false);
   const unit = data.unit;
+  const bodyKg = Number(data.profile && data.profile.weightKg) || 0;
+  const kcal = workout ? workoutKcal(workout, bodyKg) : 0;
 
   useEffect(() => {
     if (visible) {
@@ -135,6 +138,22 @@ export default function SessionReview({ visible, review, records = [], onClose }
                 </T>
               </View>
             </View>
+
+            {workout && (
+              <Card style={{ marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: C.accentDim, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="flame-outline" size={21} color={C.accent} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <T style={{ fontWeight: '700' }}>{kcal > 0 ? `≈ ${kcal} kcal` : 'Calorías sin estimar'}</T>
+                  <T mute style={{ fontSize: 12, marginTop: 1 }}>
+                    {kcal > 0
+                      ? 'MET × peso × tiempo (Compendium 2024).'
+                      : 'Agrega tu peso corporal en tu perfil para ver las kcal.'}
+                  </T>
+                </View>
+              </Card>
+            )}
 
             {review && (
               <Card style={{ marginTop: 18 }}>

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert, BackHandler, View } from 'react-native';
+import { Alert, BackHandler, Dimensions, ScrollView, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -41,6 +41,15 @@ function Shell() {
   const [routine, setRoutine] = useState(null);
   const [draft, setDraft] = useState(null);
   const workoutBackRef = useRef(null);
+  const scrollRef = useRef(null);
+  const W = Dimensions.get('window').width;
+
+  useEffect(() => {
+    const idx = TABS.findIndex((t) => t[0] === tab);
+    if (idx !== -1 && scrollRef.current) {
+      scrollRef.current.scrollTo({ x: idx * W, animated: true });
+    }
+  }, [tab]);
 
   useEffect(() => {
     if (!ready) return;
@@ -80,16 +89,36 @@ function Shell() {
   }, [routine, tab]);
 
   if (!ready || !fontsLoaded) return <View style={{ flex: 1, backgroundColor: C.bg }} />;
-  const Screen = TABS.find((t) => t[0] === tab)[3];
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <View style={{ flex: 1, paddingTop: ins.top }}>
-        <View style={{ flex: 1 }}><Screen go={setTab} start={setRoutine} /></View>
-        <View style={{ flexDirection: 'row', borderTopWidth: 1, borderColor: C.line, paddingTop: 8, paddingBottom: Math.max(ins.bottom, 10), backgroundColor: C.bg }}>
+        <ScrollView
+          ref={scrollRef}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          scrollEventThrottle={16}
+          onMomentumScrollEnd={(e) => {
+            const offsetX = e.nativeEvent.contentOffset.x;
+            const idx = Math.round(offsetX / W);
+            if (TABS[idx] && TABS[idx][0] !== tab) {
+              setTab(TABS[idx][0]);
+            }
+          }}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ width: W * TABS.length }}
+        >
+          {TABS.map(([id, , , Comp]) => (
+            <View key={id} style={{ width: W, flex: 1 }}>
+              <Comp go={setTab} start={setRoutine} />
+            </View>
+          ))}
+        </ScrollView>
+        <View style={{ flexDirection: 'row', borderTopWidth: 1, borderColor: C.line, paddingTop: 6, paddingBottom: Math.max(ins.bottom, 10), backgroundColor: C.bg }}>
           {TABS.map(([id, label, icon]) => {
             const on = id === tab;
             return (
-              <Press key={id} onPress={() => setTab(id)} style={{ alignItems: 'center', paddingVertical: 4, width: 90 }}>
+              <Press key={id} onPress={() => setTab(id)} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 48, paddingVertical: 4 }} hitSlop={8}>
                 <Ionicons name={on ? icon : `${icon}-outline`} size={24} color={on ? C.accent : C.mute} />
                 <T style={{ fontSize: 11, marginTop: 3, color: on ? C.accent : C.mute }}>{label}</T>
               </Press>

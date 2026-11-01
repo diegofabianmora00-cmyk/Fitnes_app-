@@ -76,14 +76,14 @@ export default function Routines({ start }) {
   ]);
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 22, paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
+    <ScrollView style={{ width: '100%' }} contentContainerStyle={{ padding: 22, paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
       <FadeIn><H>Rutinas</H></FadeIn>
       {data.routines.map((r, i) => (
         <FadeIn key={r.id} delay={80 + i * 70}>
           <Card style={{ marginTop: 14 }}>
             <T style={{ fontSize: 20, fontWeight: '700' }}>{r.name}</T>
             <View style={{ marginTop: 8, gap: 4 }}>
-              {r.exercises.map((e) => <T key={e.id} mute>{e.name} · {e.sets}×{e.reps}</T>)}
+              {r.exercises.map((e, i) => <T key={`${e.id}-${i}`} mute>{e.name} · {e.sets}×{e.reps}</T>)}
             </View>
             <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
               <Btn label="Entrenar" onPress={() => start(r)} style={{ flex: 1, paddingVertical: 12 }} />

@@ -4,6 +4,7 @@ export const KEYS = {
   corrupt: 'fitnesscoach:v1:corrupto',
   backup: 'fitnesscoach:v1:backup',
   draft: 'fitnesscoach:v1:draft',
+  seedBackup: 'fitnesscoach:v1:pruebas-copia',
 };
 const KEY = KEYS.data;
 const BACKUP_KEY = KEYS.backup;
@@ -19,16 +20,12 @@ export const KG = 2.20462;
 export const toU = (kg, u) => {
   if (kg == null) return kg;
   const val = u === 'kg' ? kg : kg * KG;
-  if (u === 'lb') return Math.round(val * 2) / 2;
   return Math.round(val * 10) / 10;
 };
 export const fromU = (v, u) => {
   if (v == null || isNaN(v)) return 0;
-  if (u === 'lb') {
-    const lb = Math.round(v * 2) / 2;
-    return lb / KG;
-  }
-  return v;
+  const n = Math.round(Number(v) * 10) / 10;
+  return u === 'lb' ? n / KG : n;
 };
 
 export const PROFILE_DEFAULT = {
@@ -196,7 +193,9 @@ export function StoreProvider({ children }) {
 export function lastSets(data, exId) {
   for (const w of data.workouts) {
     const e = w.exercises.find((x) => x.exId === exId);
-    if (e) return e.sets;
+    if (!e) continue;
+    const sets = (e.sets || []).filter((s) => !s.unconfirmed);
+    if (sets.length) return sets;
   }
   return [];
 }

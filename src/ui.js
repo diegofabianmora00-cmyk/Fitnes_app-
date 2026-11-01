@@ -2,13 +2,30 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, Text, TextInput, View } from 'react-native';
 import { C } from './theme';
 
-export function Press({ onPress, onLongPress, style, children, disabled }) {
+export function Press({ onPress, onLongPress, style, children, disabled, hitSlop }) {
   const s = useRef(new Animated.Value(1)).current;
   const to = (v) => Animated.spring(s, { toValue: v, speed: 40, bounciness: 6, useNativeDriver: true }).start();
+  const flattenedStyle = Array.isArray(style) ? Object.assign({}, ...style) : (style || {});
+  const layoutKeys = [
+    'flex', 'flexGrow', 'flexShrink', 'flexBasis',
+    'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
+    'margin', 'marginHorizontal', 'marginVertical', 'marginTop', 'marginBottom', 'marginLeft', 'marginRight',
+    'alignSelf', 'position', 'top', 'bottom', 'left', 'right', 'zIndex'
+  ];
+  const layoutStyle = {};
+  const innerStyle = {};
+  for (const key of Object.keys(flattenedStyle)) {
+    if (layoutKeys.includes(key)) {
+      layoutStyle[key] = flattenedStyle[key];
+    } else {
+      innerStyle[key] = flattenedStyle[key];
+    }
+  }
   return (
-    <Pressable disabled={disabled} onPress={onPress} onLongPress={onLongPress}
+    <Pressable disabled={disabled} onPress={onPress} onLongPress={onLongPress} hitSlop={hitSlop}
+      style={layoutStyle}
       onPressIn={() => to(0.96)} onPressOut={() => to(1)}>
-      <Animated.View style={[style, { transform: [{ scale: s }] }]}>{children}</Animated.View>
+      <Animated.View style={[innerStyle, { transform: [{ scale: s }] }]}>{children}</Animated.View>
     </Pressable>
   );
 }
@@ -44,10 +61,10 @@ export const T = ({ style, mute, children, ...p }) => {
   );
 };
 export const H = ({ children, style }) => (
-  <Text style={[{ color: C.text, fontSize: 30, fontWeight: '700', letterSpacing: -0.6 }, style]}>{children}</Text>
+  <Text style={[{ color: C.text, fontSize: 30, fontWeight: '700', letterSpacing: -0.6, fontFamily: 'Inter_700Bold' }, style]}>{children}</Text>
 );
 export const Btn = ({ label, onPress, kind, style, disabled }) => (
-  <Press disabled={disabled} onPress={onPress} style={[{ backgroundColor: kind === 'ghost' ? C.card2 : C.accent, paddingVertical: 15, paddingHorizontal: 18, borderRadius: 16, alignItems: 'center' }, disabled && { opacity: 0.45 }, style]}>
+  <Press disabled={disabled} onPress={onPress} style={[{ backgroundColor: kind === 'ghost' ? C.card2 : C.accent, minHeight: 48, justifyContent: 'center', paddingVertical: 15, paddingHorizontal: 18, borderRadius: 16, alignItems: 'center' }, disabled && { opacity: 0.45 }, style]}>
     <Text style={{ color: kind === 'ghost' ? C.text : '#06120D', fontWeight: '700', fontSize: 16, fontFamily: 'Inter_700Bold' }}>{label}</Text>
   </Press>
 );

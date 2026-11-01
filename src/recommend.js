@@ -1,10 +1,35 @@
 import { exerciseById } from './exercises';
 
 const KG = 2.20462;
+const LOAD_STEP = { kg: 2.5, lb: 5 };
+const LOAD_MIN = { kg: 1.25, lb: 2.5 };
 const toDisplay = (kg, unit) => Math.round((unit === 'kg' ? kg : kg * KG) * 10) / 10;
 const mm = (s) => `${Math.floor(s / 60)}:${String(Math.abs(s) % 60).padStart(2, '0')}`;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const roundTo = (v, step) => Math.round(v / step) * step;
+const sameKg = (a, b) => Math.abs((Number(a) || 0) - (Number(b) || 0)) <= 0.01;
+
+export const loadStepFor = (unit) => LOAD_STEP[unit] || LOAD_STEP.kg;
+export const loadMinFor = (unit) => LOAD_MIN[unit] || LOAD_MIN.kg;
+export const loadFromKg = (kg, unit) => (unit === 'lb' ? (Number(kg) || 0) * KG : Number(kg) || 0);
+export const kgFromLoad = (value, unit) => (unit === 'lb' ? (Number(value) || 0) / KG : Number(value) || 0);
+export const roundLoad = (value, unit = 'kg') => {
+  const v = Number(value) || 0;
+  if (!(v > 0)) return 0;
+  const step = loadStepFor(unit);
+  const min = loadMinFor(unit);
+  if (v <= min) return min;
+  return Math.max(min, Math.round(v / step) * step);
+};
+export const addLoadStep = (value, unit = 'kg') => {
+  const v = roundLoad(value, unit);
+  const step = loadStepFor(unit);
+  return v <= loadMinFor(unit) ? step : v + step;
+};
+export const subLoadStep = (value, unit = 'kg') => {
+  const v = roundLoad(value, unit);
+  if (v <= 0) return 0;
+  return v <= loadStepFor(unit) ? loadMinFor(unit) : v - loadStepFor(unit);
+};
 
 export const SOURCES = {
   acsm2009:
@@ -87,8 +112,8 @@ export const RULES = {
     id: 'load',
     title: 'Cuánto subir el peso',
     detail:
-      'El ACSM recomienda aumentos de 2-10%. La app usa 2,5% en torso/aislamiento y 5% en piernas/glúteos ' +
-      'compuestos, redondeando al disco o mancuerna disponible.',
+      'El ACSM recomienda aumentos de 2-10%. La app sube 2,5 kg o 5 lb según tu unidad, ' +
+      'redondeando al disco o mancuerna disponible (mínimo 1,25 kg o 2,5 lb).',
     source: SOURCES.acsm2009,
     kind: 'science',
   },
@@ -229,24 +254,17 @@ export function frequencyAdvice(profile = {}) {
 const needFor = (profile) =>
   profile.ambition === 'maximizar' ? 1 : profile.ambition === 'mantener' ? 3 : 2;
 
-const stepFor = (group) => (group === 'Piernas' || group === 'Glúteos' ? 5 : 2.5);
-
-const incrementFor = (top, type, group) => {
-  const pct = type === 'compuesto' && (group === 'Piernas' || group === 'Glúteos') ? 0.05 : 0.025;
-  const step = stepFor(group);
-  return Math.max(step, roundTo(top * pct, step));
-};
-
-const topWeight = (s) => Math.max(0, ...(s.sets || []).map((x) => Number(x.w) || 0));
-const totalReps = (s) => (s.sets || []).reduce((a, x) => a + (Number(x.r) || 0), 0);
+const topWeight = (s) => Math.max(0, ...(s.sets || []).filter((x) => !x.unconfirmed).map((x) => Number(x.w) || 0));
+const totalReps = (s) => (s.sets || []).filter((x) => !x.unconfirmed).reduce((a, x) => a + (Number(x.r) || 0), 0);
 
 function sessionInfo(s, fallbackTarget = 8) {
   const target = Number(s.target) || fallbackTarget;
-  const reps = (s.sets || []).map((x) => Number(x.r) || 0);
+  const sets = (s.sets || []).filter((x) => !x.unconfirmed);
+  const reps = sets.map((x) => Number(x.r) || 0);
   const met = target > 0 && reps.length > 0 && reps.every((r) => r >= target);
   const over = target > 0 && reps.length > 0 && reps.every((r) => r >= target + 2);
-  const failed = (s.sets || []).some((x) => x.failure);
-  const rirs = (s.sets || [])
+  const failed = sets.some((x) => x.failure);
+  const rirs = sets
     .map((x) => x.rir)
     .filter((v) => v !== null && v !== undefined && v !== '')
     .map(Number)
@@ -268,7 +286,7 @@ function sessionHistory(data, exId) {
   for (const w of [...(data.workouts || [])].sort((a, b) => (b.date || 0) - (a.date || 0))) {
     const e = (w.exercises || []).find((x) => x.exId === exId);
     if (!e) continue;
-    const sets = (e.sets || []).filter((s) => Number(s.r) > 0);
+    const sets = (e.sets || []).filter((s) => Number(s.r) > 0 && !s.unconfirmed);
     if (!sets.length) continue;
     out.push({ date: w.date || 0, workoutId: w.id, target: Number(e.targetReps ?? e.target) || 0, sets });
   }
@@ -277,7 +295,7 @@ function sessionHistory(data, exId) {
 
 function detectStall(history, top, fallbackTarget) {
   const last3 = history.slice(0, 3);
-  if (last3.length === 3 && last3.every((s) => topWeight(s) === top)) {
+  if (last3.length === 3 && last3.every((s) => sameKg(topWeight(s), top))) {
     const newest = sessionInfo(last3[0], fallbackTarget);
     const oldest = sessionInfo(last3[2], fallbackTarget);
     if (newest.best <= oldest.best && newest.total <= oldest.total && !(newest.met && newest.margin)) {
@@ -287,7 +305,7 @@ function detectStall(history, top, fallbackTarget) {
   }
   let count = 0;
   for (const s of history) {
-    if (topWeight(s) === top) count++;
+    if (sameKg(topWeight(s), top)) count++;
     else break;
   }
   if (count >= 2) {
@@ -303,7 +321,7 @@ function detectStall(history, top, fallbackTarget) {
 
 function restFeedbackFromSets(sets, targetSec) {
   const rests = (sets || [])
-    .filter((s) => s && s.restBeforeSec !== null && s.restBeforeSec !== undefined)
+    .filter((s) => s && !s.unconfirmed && s.restBeforeSec !== null && s.restBeforeSec !== undefined)
     .map((s) => Number(s.restBeforeSec))
     .filter((n) => Number.isFinite(n) && n >= 0);
   if (!rests.length) return null;
@@ -418,6 +436,9 @@ export function recommendFor(data = {}, ex = {}) {
   const top = topWeight(last);
   const info = sessionInfo(last, baseTarget);
   const weightText = (kg) => `${toDisplay(kg, unit)} ${unit}`;
+  const topLoad = roundLoad(loadFromKg(top, unit), unit);
+  const topKg = kgFromLoad(topLoad, unit);
+  const stepLoad = loadStepFor(unit);
 
   if (history.length >= 2) {
     const prev = sessionInfo(history[1], baseTarget);
@@ -468,31 +489,30 @@ export function recommendFor(data = {}, ex = {}) {
   let streak = 0;
   for (const s of history) {
     const i = sessionInfo(s, baseTarget);
-    if (topWeight(s) === top && i.met && i.margin) streak++;
+    if (sameKg(topWeight(s), top) && i.met && i.margin) streak++;
     else break;
   }
 
   const stall = detectStall(history, top, baseTarget);
 
   if (info.strong || (info.met && info.margin && streak >= need)) {
-    const inc = incrementFor(top, type, group);
-    const pct = inc / top;
-    const step = stepFor(group);
+    const pct = topLoad > 0 ? stepLoad / topLoad : 0;
     if (pct > 0.1 && baseTarget < range.max) {
       const nextTarget = Math.min(baseTarget + 1, range.max);
       return {
         ...base,
         action: 'maintain',
-        weightKg: top,
+        weightKg: topKg,
         targetReps: nextTarget,
         streak,
         title: 'Suma una repetición',
-        text: `En ${name}, mantén ${weightText(top)} y busca ${nextTarget} reps. El siguiente salto de peso sería más del 10%; primero exprime el rango.`,
+        text: `En ${name}, mantén ${weightText(topKg)} y busca ${nextTarget} reps. El siguiente salto de peso sería más del 10%; primero exprime el rango.`,
         rules: [repRule, restRule, RULES.progression, RULES.load],
         primaryRule: RULES.progression,
       };
     }
-    const next = Math.max(roundTo(top, step) + step, roundTo(top + inc, step));
+    const nextLoad = addLoadStep(topLoad, unit);
+    const next = kgFromLoad(nextLoad, unit);
     return {
       ...base,
       action: 'up',
@@ -511,11 +531,11 @@ export function recommendFor(data = {}, ex = {}) {
     return {
       ...base,
       action: 'stall',
-      weightKg: top,
+      weightKg: topKg,
       streak,
       stallDays: stall.days,
       title: 'Revisa el estancamiento',
-      text: `Llevas ${stall.reason} con ${name} en ${weightText(top)} sin mejorar. Mantén el peso y revisa sueño, comida y técnica.`,
+      text: `Llevas ${stall.reason} con ${name} en ${weightText(topKg)} sin mejorar. Mantén el peso y revisa sueño, comida y técnica.`,
       rules: [repRule, restRule, RULES.stall],
       primaryRule: RULES.stall,
     };
@@ -525,10 +545,10 @@ export function recommendFor(data = {}, ex = {}) {
     return {
       ...base,
       action: 'maintain',
-      weightKg: top,
+      weightKg: topKg,
       streak,
       title: 'Mantén y gana margen',
-      text: `En ${name}, mantén ${weightText(top)}. Llegaste al objetivo, pero al fallo o sin margen; busca 1 repetición en reserva antes de subir.`,
+      text: `En ${name}, mantén ${weightText(topKg)}. Llegaste al objetivo, pero al fallo o sin margen; busca 1 repetición en reserva antes de subir.`,
       rules: [repRule, RULES.progression, RULES.rir],
       primaryRule: RULES.rir,
     };
@@ -538,10 +558,10 @@ export function recommendFor(data = {}, ex = {}) {
     return {
       ...base,
       action: 'maintain',
-      weightKg: top,
+      weightKg: topKg,
       streak,
       title: 'Vas bien: mantén',
-      text: `En ${name}, mantén ${weightText(top)} una sesión más. Llevas ${streak} de ${need} sesiones para subir.`,
+      text: `En ${name}, mantén ${weightText(topKg)} una sesión más. Llevas ${streak} de ${need} sesiones para subir.`,
       rules: [repRule, RULES.progression],
       primaryRule: RULES.progression,
     };
@@ -550,10 +570,10 @@ export function recommendFor(data = {}, ex = {}) {
   return {
     ...base,
     action: 'maintain',
-    weightKg: top,
+    weightKg: topKg,
     streak,
     title: 'Mantén el peso',
-    text: `En ${name}, mantén ${weightText(top)} y busca una repetición más por serie.`,
+    text: `En ${name}, mantén ${weightText(topKg)} y busca una repetición más por serie.`,
     rules: [repRule, RULES.progression],
     primaryRule: RULES.progression,
   };
@@ -567,10 +587,10 @@ export function personalRecords(data = {}, exId) {
       for (const s of e.sets || []) {
         const r = Number(s.r) || 0;
         const kg = Number(s.w) || 0;
-        if (r <= 0) continue;
+        if (r <= 0 || s.unconfirmed) continue;
         const cand = { exId: e.exId, name: e.name, weightKg: kg, reps: r, date: w.date || 0, workoutId: w.id };
         const cur = prs[e.exId];
-        if (!cur || kg > cur.weightKg || (kg === cur.weightKg && r > cur.reps)) prs[e.exId] = cand;
+        if (!cur || kg > cur.weightKg + 0.01 || (sameKg(kg, cur.weightKg) && r > cur.reps)) prs[e.exId] = cand;
       }
     }
   }
@@ -586,9 +606,11 @@ export function newRecords(data = {}, workout = {}) {
       for (const s of e.sets || []) {
         const r = Number(s.r) || 0;
         const kg = Number(s.w) || 0;
-        if (r <= 0) continue;
-        const key = `${e.exId}|${kg}`;
-        if (!bestAt[key] || r > bestAt[key].reps) bestAt[key] = { reps: r };
+        if (r <= 0 || s.unconfirmed) continue;
+        const list = bestAt[e.exId] || (bestAt[e.exId] = []);
+        const best = list.find((x) => sameKg(x.kg, kg));
+        if (!best) list.push({ kg, reps: r });
+        else if (r > best.reps) best.reps = r;
       }
     }
   }
@@ -601,16 +623,16 @@ export function newRecords(data = {}, workout = {}) {
     (e.sets || []).forEach((s, setIndex) => {
       const r = Number(s.r) || 0;
       const kg = Number(s.w) || 0;
-      if (r <= 0) return;
-      if (kg > h.weightKg) {
+      if (r <= 0 || s.unconfirmed) return;
+      if (kg > h.weightKg + 0.01) {
         const cand = { exId: e.exId, name: e.name || h.name, kind: 'weight', weightKg: kg, reps: r, exIndex, setIndex };
-        if (!weightBest || kg > weightBest.weightKg || (kg === weightBest.weightKg && r > weightBest.reps)) weightBest = cand;
+        if (!weightBest || kg > weightBest.weightKg + 0.01 || (sameKg(kg, weightBest.weightKg) && r > weightBest.reps)) weightBest = cand;
         return;
       }
-      const prev = bestAt[`${e.exId}|${kg}`];
+      const prev = (bestAt[e.exId] || []).find((x) => sameKg(x.kg, kg));
       if (prev && r > prev.reps) {
         const cand = { exId: e.exId, name: e.name || h.name, kind: 'reps', weightKg: kg, reps: r, exIndex, setIndex };
-        if (!repsBest || r > repsBest.reps || (r === repsBest.reps && kg > repsBest.weightKg)) repsBest = cand;
+        if (!repsBest || r > repsBest.reps || (r === repsBest.reps && kg > repsBest.weightKg + 0.01)) repsBest = cand;
       }
     });
     if (weightBest) out.push(weightBest);
@@ -633,7 +655,7 @@ export function sessionReview(data = {}, workout = {}) {
   for (const e of exercises) {
     const targetReps = Number(e.targetReps ?? e.target) || 0;
     const targetSets = Number(e.targetSets) || (e.sets || []).length || 1;
-    const sets = (e.sets || []).filter((s) => Number(s.r) > 0);
+    const sets = (e.sets || []).filter((s) => Number(s.r) > 0 && !s.unconfirmed);
     const done = sets.reduce((a, s) => a + (Number(s.r) || 0), 0);
     if (targetReps > 0) {
       targetRepsTotal += targetSets * targetReps;
@@ -677,7 +699,7 @@ export function sessionReview(data = {}, workout = {}) {
 
 export function exerciseReview(data = {}, e = {}) {
   const profile = data.profile || {};
-  const sets = (e.sets || []).filter((s) => Number(s.r) > 0);
+  const sets = (e.sets || []).filter((s) => Number(s.r) > 0 && !s.unconfirmed);
   const targetReps = Number(e.targetReps) || 0;
   const targetSets = Number(e.targetSets) || sets.length || 1;
   const targetRest = Number(e.targetRestSec) || 90;
