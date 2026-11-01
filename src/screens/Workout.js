@@ -1,4 +1,3 @@
-const DRAFT_KEY = 'fitnesscoach:v1:draft';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Animated, ScrollView, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -8,7 +7,7 @@ import Svg, { Circle, Defs, LinearGradient as SvgGrad, Stop } from 'react-native
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C } from '../theme';
 import { Btn, Card, Field, Press, T } from '../ui';
-import { fromU, lastSets, toU, uid, useStore } from '../store';
+import { fromU, KEYS, lastSets, toU, uid, useStore } from '../store';
 import { exerciseById } from '../exercises';
 import { exerciseReview, newRecords, recommendFor, RULES, sessionReview } from '../recommend';
 import Coach from '../Coach';
@@ -16,6 +15,8 @@ import RuleInfo from '../RuleInfo';
 import SessionReview from '../SessionReview';
 
 const mm = (s) => `${Math.floor(s / 60)}:${String(Math.abs(Math.floor(s)) % 60).padStart(2, '0')}`;
+
+const DRAFT_KEY = KEYS.draft;
 
 const initLog = (data, routine, u) => routine.exercises.map((ex) => {
   const rec = recommendFor(data, ex);
@@ -32,22 +33,65 @@ const initLog = (data, routine, u) => routine.exercises.map((ex) => {
   return { ex, rec, sets, manualWeightKg: null };
 });
 
-export default function Workout({ routine, onClose, workoutBackRef }) {
+const clampIndex = (v, max) => {
+  const n = Number.isFinite(v) ? Math.floor(v) : 0;
+  return Math.max(0, Math.min(max, n));
+};
+
+const restorePhase = (p) => (['recommend', 'start', 'rest', 'summary'].includes(p) ? p : 'start');
+
+const restoreLog = (draftLog, routine, data, u) => {
+  const base = initLog(data, routine, u);
+  return base.map((b, i) => {
+    const atIndex = draftLog[i];
+    const saved = atIndex && atIndex.ex && atIndex.ex.id === b.ex.id
+      ? atIndex
+      : draftLog.find((x) => x && x.ex && x.ex.id === b.ex.id);
+    if (!saved || !Array.isArray(saved.sets)) return b;
+    const sets = b.sets.map((ds, k) => {
+      const s = saved.sets[k];
+      if (!s) return ds;
+      const done = !!s.done;
+      return {
+        ...ds,
+        ...s,
+        done,
+        active: false,
+        rir: s.rir == null ? null : s.rir,
+        startedAt: done ? (s.startedAt || null) : null,
+        endedAt: done ? (s.endedAt || null) : null,
+      };
+    });
+    return {
+      ...b,
+      manualWeightKg: saved.manualWeightKg != null ? saved.manualWeightKg : b.manualWeightKg,
+      sets,
+    };
+  });
+};
+
+export default function Workout({ routine, onClose, workoutBackRef, draft }) {
   const { data, update } = useStore();
   const ins = useSafeAreaInsets();
   const u = data.unit;
   const stepW = u === 'kg' ? 2.5 : 5;
   const y = useRef(new Animated.Value(900)).current;
-  const sessionStart = useRef(Date.now());
+  const restored = useRef(draft || null).current;
+  const sessionStart = useRef(restored && Number.isFinite(restored.sessionStart) ? restored.sessionStart : Date.now());
 
-  const [log, setLog] = useState(() => initLog(data, routine, u));
-  const [exIndex, setExIndex] = useState(0);
-  const [phase, setPhase] = useState('recommend');
-  const [setIndex, setSetIndex] = useState(0);
+  const [log, setLog] = useState(() => (restored && Array.isArray(restored.log) ? restoreLog(restored.log, routine, data, u) : initLog(data, routine, u)));
+  const firstIndex = clampIndex(restored ? restored.exIndex : 0, Math.max(0, (routine.exercises || []).length - 1));
+  const [exIndex, setExIndex] = useState(firstIndex);
+  const [phase, setPhase] = useState(() => restorePhase(restored && restored.phase));
+  const [setIndex, setSetIndex] = useState(() => {
+    const firstEx = (routine.exercises || [])[firstIndex];
+    return clampIndex(restored ? restored.setIndex : 0, Math.max(0, (firstEx && firstEx.sets ? firstEx.sets : 1) - 1));
+  });
   const [startedAt, setStartedAt] = useState(null);
   const [now, setNow] = useState(Date.now());
-  const [restTarget, setRestTarget] = useState(90);
-  const [restStarted, setRestStarted] = useState(null);
+  const [restTarget, setRestTarget] = useState(() => (restored && Number(restored.restTarget) > 0 ? restored.restTarget : 90));
+  const [restStarted, setRestStarted] = useState(() => (restored && Number.isFinite(restored.restStarted) ? restored.restStarted : null));
+  const [touched, setTouched] = useState(!!restored);
   const [why, setWhy] = useState(null);
   const [saved, setSaved] = useState(null);
   const [adjOpen, setAdjOpen] = useState(false);
@@ -129,6 +173,7 @@ export default function Workout({ routine, onClose, workoutBackRef }) {
   };
 
   const skipSet = () => {
+    setTouched(true);
     if (setIndex + 1 < totalSets) {
       setSetIndex((s) => s + 1);
       setPhase('recommend');
@@ -140,6 +185,7 @@ export default function Workout({ routine, onClose, workoutBackRef }) {
   };
 
   const startRunning = (si) => {
+    setTouched(true);
     const nowTs = Date.now();
     setStartedAt(nowTs);
     setSetIndex(si);
@@ -279,12 +325,24 @@ export default function Workout({ routine, onClose, workoutBackRef }) {
   };
 
   useEffect(() => {
+    if (phase === 'review' || phase === 'running' || phase === 'register') return;
+    if (!touched && !log.some((b) => b.sets.some((s) => s.done))) return;
     try {
-      if (log.some((b)=>b.sets.some((ss)=>ss.done))) {
-        AsyncStorage.setItem(DRAFT_KEY, JSON.stringify({ routine, exIndex, setIndex, phase, ts: Date.now() })).catch(()=>{});
-      }
-    } catch(e) {}
-  }, [log, exIndex, setIndex, phase]);
+      const d = {
+        v: 1,
+        routine,
+        sessionStart: sessionStart.current,
+        log,
+        exIndex,
+        setIndex,
+        phase,
+        restTarget,
+        restStarted,
+        savedAt: Date.now(),
+      };
+      AsyncStorage.setItem(DRAFT_KEY, JSON.stringify(d)).catch(() => {});
+    } catch (e) {}
+  }, [log, exIndex, setIndex, phase, restTarget, restStarted, touched]);
 
   const remainingRest = restStarted ? restTarget - Math.floor((now - restStarted) / 1000) : restTarget;
   const elapsedRest = restStarted ? Math.floor((now - restStarted) / 1000) : 0;

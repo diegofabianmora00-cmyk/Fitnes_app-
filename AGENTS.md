@@ -40,7 +40,15 @@ no los crees ni los edites.
 - docs/diseno-entrenamiento.md: diseño visual del flujo de entrenamiento. Léelo solo si
   vas a cambiar la interfaz de Workout.
 
-## Datos (pesos siempre en kg; claves de AsyncStorage: fitnesscoach:v1)
+## Datos (pesos siempre en kg)
+Claves de AsyncStorage:
+- fitnesscoach:v1: datos principales.
+- fitnesscoach:v1:copia: última copia válida; se actualiza tras cada carga y guardado
+  correcto. Se usa para restaurar si el principal está dañado.
+- fitnesscoach:v1:corrupto: texto original ilegible, guardado antes de reparar o avisar.
+- fitnesscoach:v1:backup: respaldo legado; solo se usa como segunda opción al restaurar.
+- fitnesscoach:v1:draft: borrador del entreno en curso (rutina, inicio, series y posición);
+  se borra al terminar o descartar.
 data = { schemaVersion: 2, unit,
 profile: { goal, ambition, level, daysPerWeek, weightKg, heightCm, age, sex,
   restStyle, completed, updatedAt },
@@ -84,8 +92,9 @@ workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName,
   steppers, descanso real, kcal por ejercicio, puntaje por ejercicio).
 - Hecho: correcciones 1, 2 y 4 (crash al terminar sesión, botón atrás de Android y
   "Salir" con guardar/sseguir/descartar; resumen y PR visibles).
-- En curso: resto de los 12 fallos conocidos. Críticos pendientes: borrador de entreno
-  y respaldo de datos corruptos. Importantes: descanso al saltar serie, Ring fuera del
-  componente, datos sin confirmar, unidades lb, fuente Inter, pestañas montadas,
-  botones de 48 px.
+- Hecho: fallos 3 y 5 (borrador de entreno con continuar/descartar y respaldo de datos
+  corruptos con copia válida y alerta; botón de simulación en desarrollo).
+- En curso: resto de los 12 fallos conocidos. Importantes: descanso al saltar serie,
+  Ring fuera del componente, datos sin confirmar, unidades lb, fuente Inter, pestañas
+  montadas, botones de 48 px.
 - Siguiente: paso 5 calorías visibles, paso 6 gráficas de progreso y estancados.

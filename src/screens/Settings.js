@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Alert, ScrollView, Share, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { C } from '../theme';
 import { Btn, Card, FadeIn, H, Press, T } from '../ui';
-import { toU, useStore } from '../store';
+import { KEYS, toU, useStore } from '../store';
 import { GOALS, LEVELS, REST_STYLES, labelOf } from '../recommend';
 import ProfileSetup from './ProfileSetup';
 
@@ -14,6 +15,14 @@ export default function Settings() {
     { text: 'Cancelar', style: 'cancel' },
     { text: 'Borrar', style: 'destructive', onPress: () => update((d) => ({ ...d, routines: [], workouts: [] })) },
   ]);
+  const simulateCorrupt = async () => {
+    try {
+      await AsyncStorage.setItem(KEYS.data, '{ "routines": [ datos dañados ');
+      Alert.alert('Datos dañados simulados', 'Cierra y vuelve a abrir la app para probar la recuperación desde la copia válida.');
+    } catch (e) {
+      Alert.alert('No se pudo simular', 'Inténtalo de nuevo.');
+    }
+  };
   return (
     <ScrollView contentContainerStyle={{ padding: 22 }}>
       <FadeIn><H>Ajustes</H></FadeIn>
@@ -46,6 +55,7 @@ export default function Settings() {
       <FadeIn delay={240}>
         <Btn kind="ghost" label="Exportar datos" onPress={() => Share.share({ message: JSON.stringify(data, null, 2) })} style={{ marginTop: 14 }} />
         <Btn kind="ghost" label="Borrar todos los datos" onPress={reset} style={{ marginTop: 10 }} />
+        {__DEV__ && <Btn kind="ghost" label="Simular datos dañados (solo desarrollo)" onPress={simulateCorrupt} style={{ marginTop: 10 }} />}
       </FadeIn>
       {edit && <ProfileSetup mode="edit" onDone={() => setEdit(false)} />}
     </ScrollView>

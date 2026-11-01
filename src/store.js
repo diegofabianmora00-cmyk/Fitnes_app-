@@ -1,6 +1,16 @@
-const KEY = 'fitnesscoach:v1';
-const BACKUP_KEY = 'fitnesscoach:v1:backup';
+export const KEYS = {
+  data: 'fitnesscoach:v1',
+  copy: 'fitnesscoach:v1:copia',
+  corrupt: 'fitnesscoach:v1:corrupto',
+  backup: 'fitnesscoach:v1:backup',
+  draft: 'fitnesscoach:v1:draft',
+};
+const KEY = KEYS.data;
+const BACKUP_KEY = KEYS.backup;
+const COPY_KEY = KEYS.copy;
+const CORRUPT_KEY = KEYS.corrupt;
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { exerciseById } from './exercises';
 
@@ -92,54 +102,93 @@ export const migrate = (raw) => {
 const Ctx = createContext();
 export const useStore = () => useContext(Ctx);
 
+const validRaw = (raw) => !!raw && typeof raw === 'object' && !Array.isArray(raw);
+const saveCopy = (obj) => AsyncStorage.setItem(COPY_KEY, JSON.stringify(obj)).catch(() => {});
+
 export function StoreProvider({ children }) {
   const ref = useRef(seed);
   const [data, setData] = useState(seed);
   const [ready, setReady] = useState(false);
   useEffect(() => {
+    let alive = true;
+    const apply = (merged) => {
+      ref.current = merged;
+      if (alive) setData(merged);
+    };
+    const restoreFromCopies = async () => {
+      for (const key of [COPY_KEY, BACKUP_KEY]) {
+        let text = null;
+        try { text = await AsyncStorage.getItem(key); } catch (e) { text = null; }
+        if (!text) continue;
+        let candidate = null;
+        try { candidate = JSON.parse(text); } catch (e) { candidate = null; }
+        if (!validRaw(candidate)) continue;
+        try { return migrate(candidate); } catch (e) {}
+      }
+      return null;
+    };
+    const handleCorrupt = async (originalText) => {
+      let backedUp = false;
+      try { await AsyncStorage.setItem(CORRUPT_KEY, originalText); backedUp = true; } catch (e) {}
+      const restored = await restoreFromCopies();
+      if (restored) {
+        apply(restored);
+        saveCopy(restored);
+        if (backedUp) AsyncStorage.setItem(KEY, JSON.stringify(restored)).catch(() => {});
+        Alert.alert(
+          'Datos reparados',
+          backedUp
+            ? 'Tus datos guardados estaban dañados. Guardamos una copia del archivo original en el respaldo y restauramos la última copia válida.'
+            : 'Tus datos guardados estaban dañados. Restauramos la última copia válida, pero no se pudo guardar el texto original.'
+        );
+      } else {
+        Alert.alert(
+          'Datos dañados',
+          backedUp
+            ? 'No pudimos leer tus datos y no había una copia válida. Guardamos el texto original en el respaldo para no perderlo. Se muestra la rutina inicial.'
+            : 'No pudimos leer tus datos, no había una copia válida y no se pudo guardar el texto original. Se muestra la rutina inicial.'
+        );
+      }
+    };
     AsyncStorage.getItem(KEY)
-      .then((v) => {
+      .then(async (v) => {
         if (!v) {
-          AsyncStorage.getItem(BACKUP_KEY).then((b) => {
-            if (!b) return;
-            try {
-              const raw = JSON.parse(b);
-              const merged = migrate(raw);
-              ref.current = merged;
-              setData(merged);
-            } catch (e) {}
-          }).catch(() => {});
+          const restored = await restoreFromCopies();
+          if (restored) {
+            apply(restored);
+            AsyncStorage.setItem(KEY, JSON.stringify(restored)).catch(() => {});
+            saveCopy(restored);
+          }
           return;
         }
-        AsyncStorage.setItem(BACKUP_KEY, v).catch(() => {});
-        let raw;
-        try {
-          raw = JSON.parse(v);
-        } catch (e) {
-          AsyncStorage.getItem(BACKUP_KEY).then((b) => {
-            if (!b) return;
-            try {
-              const r = JSON.parse(b);
-              const merged = migrate(r);
-              ref.current = merged;
-              setData(merged);
-            } catch (e2) {}
-          }).catch(() => {});
+        let raw = null;
+        let failed = false;
+        try { raw = JSON.parse(v); } catch (e) { failed = true; }
+        if (failed || !validRaw(raw)) {
+          await handleCorrupt(v);
           return;
         }
-        const merged = migrate(raw);
-        ref.current = merged;
-        setData(merged);
+        let merged;
+        try { merged = migrate(raw); } catch (e) { merged = null; }
+        if (!merged) {
+          await handleCorrupt(v);
+          return;
+        }
+        apply(merged);
+        saveCopy(merged);
         if (raw.schemaVersion !== 2) AsyncStorage.setItem(KEY, JSON.stringify(merged)).catch(() => {});
       })
-      .catch(() => {}).finally(() => setReady(true));
+      .catch(() => {}).finally(() => { if (alive) setReady(true); });
+    return () => { alive = false; };
   }, []);
   const update = (fn) => {
     const n = fn(ref.current);
     const next = { ...n, schemaVersion: 2 };
     ref.current = next;
     setData(next);
-    AsyncStorage.setItem(KEY, JSON.stringify(next)).catch(() => {});
+    const text = JSON.stringify(next);
+    AsyncStorage.setItem(KEY, text).catch(() => {});
+    AsyncStorage.setItem(COPY_KEY, text).catch(() => {});
   };
   return <Ctx.Provider value={{ data, update, ready }}>{children}</Ctx.Provider>;
 }

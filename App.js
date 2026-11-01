@@ -1,20 +1,30 @@
-const DRAFT_KEY = 'fitnesscoach:v1:draft';
 import React, { useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BackHandler, View } from 'react-native';
+import { Alert, BackHandler, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import { C } from './src/theme';
 import { Press, T } from './src/ui';
-import { StoreProvider, useStore } from './src/store';
+import { KEYS, StoreProvider, useStore } from './src/store';
 import Home from './src/screens/Home';
 import Routines from './src/screens/Routines';
 import Progress from './src/screens/Progress';
 import Settings from './src/screens/Settings';
 import Workout from './src/screens/Workout';
 import ProfileSetup from './src/screens/ProfileSetup';
+
+const DRAFT_KEY = KEYS.draft;
+
+const isValidDraft = (d) => {
+  if (!d || typeof d !== 'object') return false;
+  if (!d.routine || typeof d.routine !== 'object' || !Array.isArray(d.routine.exercises)) return false;
+  if (!Array.isArray(d.log) || d.log.length === 0) return false;
+  if (typeof d.exIndex !== 'number' || typeof d.setIndex !== 'number') return false;
+  if (d.exIndex < 0 || d.exIndex >= d.log.length || d.setIndex < 0) return false;
+  return d.log.every((b) => b && b.ex && Array.isArray(b.sets));
+};
 
 const TABS = [
   ['home', 'Inicio', 'home', Home],
@@ -29,7 +39,30 @@ function Shell() {
   const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold });
   const [tab, setTab] = useState('home');
   const [routine, setRoutine] = useState(null);
+  const [draft, setDraft] = useState(null);
   const workoutBackRef = useRef(null);
+
+  useEffect(() => {
+    if (!ready) return;
+    let alive = true;
+    const discard = () => { AsyncStorage.removeItem(DRAFT_KEY).catch(() => {}); };
+    AsyncStorage.getItem(DRAFT_KEY).then((v) => {
+      if (!alive || !v) return;
+      let d = null;
+      try { d = JSON.parse(v); } catch (e) { d = null; }
+      if (!isValidDraft(d)) { discard(); return; }
+      Alert.alert(
+        'Entreno sin terminar',
+        `Tienes "${d.routine.name || 'tu rutina'}" en curso. ¿Qué deseas hacer?`,
+        [
+          { text: 'Descartar', style: 'destructive', onPress: discard },
+          { text: 'Continuar entreno', onPress: () => { setDraft(d); setRoutine(d.routine); } },
+        ],
+        { cancelable: false }
+      );
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [ready]);
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -64,7 +97,7 @@ function Shell() {
           })}
         </View>
       </View>
-      {routine && <Workout routine={routine} workoutBackRef={workoutBackRef} onClose={() => { AsyncStorage.removeItem(DRAFT_KEY).catch(()=>{}); setRoutine(null); }} />}
+      {routine && <Workout routine={routine} draft={draft} workoutBackRef={workoutBackRef} onClose={() => { setRoutine(null); setDraft(null); }} />}
       {!data.profile?.completed && <ProfileSetup />}
     </View>
   );
