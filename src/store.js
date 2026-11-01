@@ -50,11 +50,18 @@ const seed = {
   unit: 'kg',
   profile: { ...PROFILE_DEFAULT },
   coachMemory: [],
-  routines: [{ id: 'r1', name: 'Empuje', exercises: [
-    { id: 'press-banca', name: 'Press de banca', group: 'Pecho', equipment: 'Barra', sets: 3, reps: 8 },
-    { id: 'press-militar', name: 'Press militar', group: 'Hombros', equipment: 'Barra', sets: 3, reps: 10 },
-    { id: 'fondos', name: 'Fondos en paralelas', group: 'Pecho', equipment: 'Peso corporal', sets: 3, reps: 12 },
-  ] }],
+  routines: [{
+    id: 'r1',
+    name: 'Empuje',
+    goal: 'hipertrofia',
+    days: [0, 3],
+    defaults: { sets: 3, reps: 10, restSec: 120 },
+    exercises: [
+      { id: 'press-banca', name: 'Press de banca', group: 'Pecho', equipment: 'Barra', sets: 3, reps: 8, mode: 'default' },
+      { id: 'press-militar', name: 'Press militar', group: 'Hombros', equipment: 'Barra', sets: 3, reps: 10, mode: 'default' },
+      { id: 'fondos', name: 'Fondos en paralelas', group: 'Pecho', equipment: 'Peso corporal', sets: 3, reps: 12, mode: 'default' },
+    ]
+  }],
   workouts: [],
 };
 
@@ -69,6 +76,31 @@ const normalizeExercise = (e) => {
     equipment: e.equipment || (db && db.equipment) || '',
   };
 };
+
+const normalizeRoutine = (r) => {
+  const exercises = (r.exercises || []).map((e) => {
+    const norm = normalizeExercise(e);
+    return {
+      ...norm,
+      sets: Number(e.sets) || 3,
+      reps: Number(e.reps) || 10,
+      mode: e.mode || 'default',
+      rir: e.rir !== undefined ? Number(e.rir) : 2,
+    };
+  });
+  return {
+    ...r,
+    goal: r.goal || 'hipertrofia',
+    days: Array.isArray(r.days) ? r.days : [],
+    defaults: r.defaults || { sets: 3, reps: 10, restSec: 120 },
+    exercises,
+  };
+};
+
+export function routinesForDay(data, dayIndex) {
+  if (!data || !data.routines) return [];
+  return data.routines.filter((r) => Array.isArray(r.days) && r.days.includes(dayIndex));
+}
 
 const normalizeWorkoutExercise = (e) => {
   const exId = LEGACY[e.exId] || e.exId;
@@ -90,10 +122,7 @@ export const migrate = (raw) => {
     profile: { ...PROFILE_DEFAULT, tone: raw.profile?.tone || 'tranquilo', ...(raw.profile || {}) },
     coachMemory: Array.isArray(raw.coachMemory) ? raw.coachMemory : (Array.isArray(raw.profile?.coachMemory) ? raw.profile.coachMemory : []),
   };
-  const routines = (base.routines || []).map((r) => ({
-    ...r,
-    exercises: (r.exercises || []).map(normalizeExercise),
-  }));
+  const routines = (base.routines || []).map(normalizeRoutine);
   const workouts = (base.workouts || [])
     .map((w) => ({
       ...w,

@@ -29,7 +29,7 @@ no los crees ni los edites.
 - src/RuleInfo.js: modal que explica reglas y fuentes.
 - src/SessionReview.js: celebración de PR y resumen/puntaje de sesión.
 - src/screens/Home.js: mensaje de Atlas, reglas, siguiente rutina, semana.
-- src/screens/Routines.js: lista de rutinas y Editor (modal) con ExercisePicker.
+- src/screens/Routines.js: pestaña "Mi semana" y asistente de 2 pasos para crear/editar rutinas y configurar ejercicios.
 - src/screens/ProfileSetup.js: cuestionario inicial / edición del perfil.
 - src/screens/Workout.js: overlay con Iniciar/Terminar serie, descanso real, RIR,
   guardado de la sesión, PR y resumen.
@@ -57,7 +57,7 @@ data = { schemaVersion: 2, unit,
 profile: { goal, ambition, level, daysPerWeek, weightKg, heightCm, age, sex,
   restStyle, tone, completed, updatedAt },
 coachMemory: [string], // últimos 8 ids de mensajes mostrados por Atlas
-routines: [{ id, name, exercises: [{ id, name, group, equipment, sets, reps }] }],
+routines: [{ id, name, goal, days: [0..6], defaults: { sets, reps, restSec }, exercises: [{ id, name, group, equipment, sets, reps, mode, rir }] }],
 workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName,
   prs: [{ exId, name, kind, weightKg, reps }],
   score: { score, grade, components, restNotes, durationSec },
@@ -102,8 +102,8 @@ workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName,
 
 ## Estado
 - Hecho: app base, base de ejercicios, perfil, motor de recomendación, entrenamiento
-  guiado, calorías, gráficas básicas, pruebas del motor (15) y arreglos de los fallos
-  1 al 9, 11 y 12.
+  guiado, calorías, gráficas básicas, pruebas del motor (15), arreglos de los fallos
+  1 al 9, 11 y 12, y rediseño completo de la pestaña Rutinas (Mi semana y asistente de 2 pasos).
 - Por confirmar: fallo 10 (fuente Inter en H y Btn de src/ui.js); no consta como hecho.
 - Pendiente: mejoras (e1RM y puntaje separado, Inicio, Progreso, Ajustes, salud y
   lesiones, configuración y accesibilidad, almacenamiento por mes) e ideas (memoria y
