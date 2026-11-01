@@ -9,7 +9,7 @@ import { C } from '../theme';
 import { Btn, Card, Press, T } from '../ui';
 import { fromU, KEYS, lastSets, toU, uid, useStore } from '../store';
 import { exerciseById } from '../exercises';
-import { addLoadStep, exerciseReview, newRecords, recommendFor, roundLoad, RULES, sessionReview, subLoadStep } from '../recommend';
+import { addLoadStep, exerciseReview, GOALS, labelOf, LEVELS, newRecords, recommendFor, roundLoad, RULES, sessionReview, subLoadStep } from '../recommend';
 import Coach from '../Coach';
 import RuleInfo from '../RuleInfo';
 import SessionReview from '../SessionReview';
@@ -63,14 +63,14 @@ const initLog = (data, routine, u) => routine.exercises.map((ex) => {
     w: suggestedWeight,
     r: prev[i] ? String(prev[i].r) : suggestedReps,
     rir: suggestedRir,
-    confirmed: { r: false, w: bodyweight, rir: false },
+    confirmed: { r: false, w: bodyweight || rec.weightKg != null, rir: false },
     unconfirmed: true,
     startedAt: null,
     endedAt: null,
     restBeforeSec: null,
     done: false,
   }));
-  return { ex, rec, sets, manualWeightKg: null };
+  return { ex, rec, sets };
 });
 
 const clampIndex = (v, max) => {
@@ -108,7 +108,6 @@ const restoreLog = (draftLog, routine, data, u) => {
     });
     return {
       ...b,
-      manualWeightKg: saved.manualWeightKg != null ? saved.manualWeightKg : b.manualWeightKg,
       sets,
     };
   });
@@ -118,7 +117,6 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
   const { data, update } = useStore();
   const ins = useSafeAreaInsets();
   const u = data.unit;
-  const stepW = u === 'kg' ? 2.5 : 5;
   const y = useRef(new Animated.Value(900)).current;
   const restored = useRef(draft || null).current;
   const sessionStart = useRef(restored && Number.isFinite(restored.sessionStart) ? restored.sessionStart : Date.now());
@@ -138,9 +136,6 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
   const [touched, setTouched] = useState(!!restored);
   const [why, setWhy] = useState(null);
   const [saved, setSaved] = useState(null);
-  const [adjOpen, setAdjOpen] = useState(false);
-  const [adjValue, setAdjValue] = useState(0);
-  const [noHistWeight, setNoHistWeight] = useState(stepW);
   const [reg, setReg] = useState({ r: '', w: '', rir: null });
   const [regConfirmed, setRegConfirmed] = useState({ r: false, w: false, rir: false });
 
@@ -156,7 +151,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
   const rec = cur.rec;
   const totalSets = cur.ex.sets;
   const completedSets = cur.sets.filter((s) => s.done).length;
-  const effectiveWeightKg = cur.manualWeightKg != null ? cur.manualWeightKg : rec.weightKg;
+  const effectiveWeightKg = rec.weightKg;
 
   const close = () => Animated.timing(y, { toValue: 900, duration: 240, useNativeDriver: true }).start(onClose);
   const closeAll = () => { setSaved(null); AsyncStorage.removeItem(DRAFT_KEY).catch(()=>{}); close(); };
@@ -176,7 +171,6 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
   };
 
   const handleBack = () => {
-    if (adjOpen) { setAdjOpen(false); return true; }
     if (why) { setWhy(null); return true; }
     if (saved) { closeAll(); return true; }
     askClose();
@@ -191,24 +185,20 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
 
   const updSet = (ei, si, patch) => setLog((a) => a.map((b, x) => (x !== ei ? b : { ...b, sets: b.sets.map((s, k) => (k !== si ? s : { ...s, ...patch })) })));
 
-  const applyWeight = (ei, kg) => {
-    const disp = roundLoad(toU(kg, u), u);
-    const normalizedKg = fromU(disp, u);
-    setLog((a) => a.map((b, x) => (x !== ei ? b : {
-      ...b,
-      manualWeightKg: normalizedKg,
-      sets: b.sets.map((s) => (s.done ? s : {
-        ...s,
-        w: normalizedKg > 0 ? String(disp) : '',
-        confirmed: { ...(s.confirmed || {}), w: true },
-      })),
-    })));
-  };
-
-  const openAdjust = () => {
-    const base = effectiveWeightKg != null && effectiveWeightKg > 0 ? roundLoad(toU(effectiveWeightKg, u), u) : stepW;
-    setAdjValue(base);
-    setAdjOpen(true);
+  const applyRecommendation = () => {
+    if (rec.weightKg != null && rec.weightKg > 0) {
+      const disp = roundLoad(toU(rec.weightKg, u), u);
+      const normalizedKg = fromU(disp, u);
+      setLog((a) => a.map((b, x) => (x !== exIndex ? b : {
+        ...b,
+        sets: b.sets.map((s) => (s.done ? s : {
+          ...s,
+          w: normalizedKg > 0 ? String(disp) : '',
+          confirmed: { ...(s.confirmed || {}), w: true },
+        })),
+      })));
+    }
+    setPhase('start');
   };
 
   const goNextExercise = () => {
@@ -326,7 +316,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
       targetReps: b.rec.targetReps || b.ex.reps,
       targetSets: b.ex.sets,
       targetRestSec: b.rec.restSec,
-      recWeightKg: b.manualWeightKg != null ? b.manualWeightKg : b.rec.weightKg,
+      recWeightKg: b.rec.weightKg,
       sets: b.sets.filter((s) => s.done && parseInt(s.r) > 0).map((s) => {
         const confirmed = s.confirmed || { r: true, w: true, rir: true };
         const unconfirmed = s.unconfirmed != null ? !!s.unconfirmed : !(confirmed.r && confirmed.w && confirmed.rir);
@@ -404,7 +394,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
     targetReps: rec.targetReps || cur.ex.reps,
     targetSets: cur.ex.sets,
     targetRestSec: rec.restSec,
-    recWeightKg: effectiveWeightKg != null ? effectiveWeightKg : rec.weightKg,
+    recWeightKg: rec.weightKg,
     sets: cur.sets,
   }) : null;
 
@@ -441,10 +431,16 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
   }
 
   if (phase === 'recommend') {
-    const noHist = !rec.weightKg && rec.weightKg !== 0;
+    const insufficient = rec.sessions === 0 || (rec.weightKg == null && !bodyweight);
     const bodyweight = rec.weightKg === 0;
     const rirTarget = Array.isArray(rec.rir) ? (rec.rir[1] ?? rec.rir[0] ?? 2) : 2;
     const rirStart = (4 - rirTarget) * 19.5;
+    const goalLabel = labelOf(GOALS, data.profile && data.profile.goal);
+    const levelLabel = labelOf(LEVELS, data.profile && data.profile.level);
+    const coachText = insufficient
+      ? `No tengo registros previos de este ejercicio en tu historial (0 sesiones). Como tu objetivo es ${goalLabel.toLowerCase()} y tu nivel es ${levelLabel.toLowerCase()}, la información que tengo no es suficiente como para sugerirte un peso. Elige un peso libre con el que puedas mantener RIR 2-3.`
+      : `Basado en tu historial (${rec.sessions} ${rec.sessions === 1 ? 'sesión' : 'sesiones'}) y tu objetivo de ${goalLabel.toLowerCase()} (${levelLabel.toLowerCase()}), te sugiero ${bodyweight ? 'peso corporal' : `${toU(rec.weightKg, u)} ${u}`} para ${rec.targetReps} reps con RIR ${rirTarget}.`;
+
     return (
       <Animated.View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, transform: [{ translateY: y }] }}>
         <LinearGradient colors={[C.bgTop, C.bgBot]} locations={[0, 0.38]} style={{ flex: 1, ...commonPad }}>
@@ -455,29 +451,20 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <Coach mood="neutral" size="sm" />
                 <View style={{ flex: 1, backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: C.line, paddingVertical: 12, paddingHorizontal: 14 }}>
-                  <T style={{ fontSize: 14, lineHeight: 20 }}>Esta es mi recomendación según tu historial. Puedes ajustarla.</T>
+                  <T style={{ fontSize: 14, lineHeight: 20 }}>{coachText}</T>
                 </View>
               </View>
               <Card style={{ padding: 18, borderRadius: 26 }}>
-                <T style={{ fontSize: 12, fontWeight: '600', color: C.mute, letterSpacing: 1.2 }}>RECOMENDADO</T>
-                {noHist ? (
+                <T style={{ fontSize: 12, fontWeight: '600', color: C.mute, letterSpacing: 1.2 }}>RECOMENDACIÓN</T>
+                {insufficient ? (
                   <View style={{ marginTop: 8 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Press onPress={() => setNoHistWeight((v) => subLoadStep(v, u))} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
-                        <Ionicons name="remove" size={22} color={C.text} />
-                      </Press>
-                      <T style={{ fontSize: 38, fontWeight: '700', letterSpacing: -1.1, fontVariant: ['tabular-nums'], flex: 1, textAlign: 'center' }}>{noHistWeight.toString().replace('.', ',')}</T>
-                      <Press onPress={() => setNoHistWeight((v) => addLoadStep(v, u))} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
-                        <Ionicons name="add" size={22} color={C.text} />
-                      </Press>
-                    </View>
-                    <T style={{ fontSize: 12, color: C.mute, textAlign: 'center', marginTop: 4 }}>{u.toUpperCase()}</T>
+                    <T style={{ fontSize: 17, fontWeight: '600', color: C.text, lineHeight: 24 }}>La información que tengo no es suficiente como para sugerirte un peso.</T>
                   </View>
                 ) : bodyweight ? (
                   <T style={{ fontSize: 24, fontWeight: '700', marginTop: 6 }}>Peso corporal</T>
                 ) : (
                   <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 4 }}>
-                    <T style={{ fontSize: 78, fontWeight: '700', lineHeight: 82, fontVariant: ['tabular-nums'] }}>{toU(effectiveWeightKg, u)}</T>
+                    <T style={{ fontSize: 78, fontWeight: '700', lineHeight: 82, fontVariant: ['tabular-nums'] }}>{toU(rec.weightKg, u)}</T>
                     <T style={{ fontSize: 22, fontWeight: '500', color: C.mute, marginLeft: 6 }}>{u}</T>
                   </View>
                 )}
@@ -517,18 +504,12 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
               {!!rec.restInsight && <T style={{ fontSize: 11, lineHeight: 16, color: C.warn }}>{rec.restInsight.text}</T>}
               <View style={{ flex: 1 }} />
               <Btn
-                label={noHist ? 'Empezar con este peso' : (bodyweight ? 'Empezar' : `Usar ${toU(effectiveWeightKg, u)} ${u}`)}
-                onPress={() => {
-                  if (noHist) applyWeight(exIndex, fromU(noHistWeight, u));
-                  else if (!bodyweight && effectiveWeightKg != null && effectiveWeightKg > 0) applyWeight(exIndex, effectiveWeightKg);
-                  setPhase('start');
-                }}
+                label={insufficient ? 'Empezar' : (bodyweight ? 'Empezar' : `Usar ${toU(rec.weightKg, u)} ${u}`)}
+                onPress={applyRecommendation}
               />
-              <Btn kind="ghost" label="Ajustar" onPress={openAdjust} style={{ backgroundColor: C.ghost }} />
             </View>
           </ScrollView>
         </LinearGradient>
-        {renderAdjust()}
         <RuleInfo visible={!!why} rules={why || []} onClose={() => setWhy(null)} />
       </Animated.View>
     );
@@ -807,29 +788,4 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
   }
 
   return null;
-
-  function renderAdjust() {
-    if (!adjOpen) return null;
-    return (
-      <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: '#00000099', justifyContent: 'flex-end' }}>
-        <View style={{ backgroundColor: C.bg, borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 18, paddingBottom: Math.max(ins.bottom, 16) }}>
-          <T style={{ fontSize: 20, fontWeight: '700', marginBottom: 12 }}>Ajustar peso</T>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-            <Press onPress={() => setAdjValue((v) => subLoadStep(v, u))} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
-              <Ionicons name="remove" size={22} color={C.text} />
-            </Press>
-            <T style={{ flex: 1, textAlign: 'center', fontSize: 38, fontWeight: '700', fontVariant: ['tabular-nums'] }}>{adjValue.toString().replace('.', ',')}</T>
-            <Press onPress={() => setAdjValue((v) => addLoadStep(v, u))} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
-              <Ionicons name="add" size={22} color={C.text} />
-            </Press>
-          </View>
-          <T style={{ fontSize: 12, color: C.mute, textAlign: 'center', marginBottom: 12 }}>{u.toUpperCase()}</T>
-          <Btn label="Usar este peso" onPress={() => { applyWeight(exIndex, fromU(adjValue, u)); setAdjOpen(false); }} />
-          <Press onPress={() => setAdjOpen(false)} style={{ marginTop: 10, alignSelf: 'center' }}>
-            <T style={{ fontSize: 13, color: C.mute }}>Cancelar</T>
-          </Press>
-        </View>
-      </View>
-    );
-  }
 }

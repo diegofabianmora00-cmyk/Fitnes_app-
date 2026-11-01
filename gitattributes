@@ -1,0 +1,9 @@
+# Normaliza los saltos de linea (Windows CRLF -> LF) para evitar ruido en Git
+* text=auto eol=lf
+
+# Archivos binarios: Git no debe tocarlos
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ttf binary
+*.otf binary

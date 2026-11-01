@@ -68,7 +68,10 @@ workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName,
 ## Reglas
 - Ve directo al archivo del mapa. Abre solo lo que la tarea toque. En archivos grandes
   usa búsquedas y rangos de líneas; no los leas completos.
-- Cambios mínimos; no reescribas archivos enteros sin motivo.
+- Busca cada tarea por su descripción: los números de línea pueden haber cambiado.
+  Si algo ya está resuelto, dilo y no lo toques.
+- Cambios mínimos; no reescribas archivos enteros sin motivo. No cambies nada que la
+  tarea no pida. Si tomas una decisión que no estaba indicada, dila al final.
 - No leas package-lock.json, node_modules ni dist.
 - Paquetes nuevos: `npx expo install <paquete>` (nunca `npm install <paquete>`). Usa solo
   librerías incluidas en Expo Go (como react-native-svg); evita las demás con código nativo.
@@ -78,10 +81,10 @@ workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName,
 - Para comprobar que compila: `npx expo export --platform android 2>&1 | tail -5` y luego
   borra la carpeta dist. No hay lint ni typecheck configurados.
 - Filtra siempre la salida de los comandos (`| tail -5`).
-- No hagas commit ni push: el usuario prueba en el celular y lo hace él. Al terminar,
-  lista los archivos nuevos y modificados.
+- No hagas commit ni push: el usuario prueba en el celular y lo hace él.
 - Los datos ya guardados en el celular deben seguir funcionando: migra, nunca borres
-  historial. Si añades claves de AsyncStorage o campos a los datos, documéntalos en Datos.
+  historial, y lee también los formatos antiguos (unit ausente = kg). Si añades claves de
+  AsyncStorage o campos a los datos, documéntalos en la sección Datos.
 - Calorías y recomendaciones: con fuente, sin inventar datos. Las heurísticas propias se
   etiquetan como "criterio de la app" y viven en RULES (recommend.js).
 - El motor es puro (sin React) y debe funcionar con datos viejos, sin peso, con peso
@@ -89,28 +92,16 @@ workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName,
 - Animaciones solo con Animated.
 - Usa los componentes de src/ui.js y los colores de src/theme.js.
 - Si creas, renombras o borras un archivo, actualiza el Mapa. Al terminar un paso,
-  actualiza el Estado.
-  - Busca cada tarea por su descripción: los números de línea pueden haber cambiado.
-  Si algo ya está resuelto, dilo y no lo toques.
-- Los datos ya guardados en el celular deben seguir funcionando (lee también los
-  formatos antiguos; los datos viejos sin unidad se leen como kg).
-- No cambies nada que la tarea no pida. Si tomas una decisión que no estaba indicada, dila al final.
+  actualiza el Estado en 1 o 2 líneas (no es un historial: eso está en git).
 - Al terminar: tabla tarea | archivos modificados | estado (hecho / parcial / no hecho),
   y la lista de archivos nuevos y modificados para el commit.
 
 ## Estado
-- Hecho: pruebas unitarias con jest-expo para recommend.js (15 tests) y limpieza de dead code en Workout.js; regla rota a prop�sito y restaurada.
-- Hecho: app base; paso 1 base de ejercicios y selector; paso 2 cuestionario/perfil;
-  paso 3 motor de recomendación; paso 4 entrenamiento guiado paso a paso (anillo SVG,
-  steppers, descanso real, kcal por ejercicio, puntaje por ejercicio).
-- Hecho: correcciones 1, 2 y 4 (crash al terminar sesión, botón atrás de Android y
-  "Salir" con guardar/sseguir/descartar; resumen y PR visibles).
-- Hecho: fallos 3 y 5 (borrador de entreno con continuar/descartar y respaldo de datos
-  corruptos con copia válida y alerta; botón de simulación en desarrollo).
-- Hecho: parte 3 (fallos 6-9): descanso con el último endedAt válido (null si no hay),
-  Ring memoizado fuera del componente y cronómetro cada 1 s con Date.now(), series con
-  campos sin confirmar ignoradas por motor/PR/puntaje, y pesos redondeados en la unidad
-  del usuario (kg 2,5 / lb 5) con PR por tolerancia de 0,01 kg.
-- Hecho: pestañas montadas correctamente en App.js, objetivos táctiles mínimos de 48px y hitSlop aplicados.
-- Hecho: paso 5 (calorías visibles en resumen de sesión y progreso mediante Compendium 2024 / METs) y paso 6 (gráficas de progreso filtradas por series confirmadas, indicador de estancamiento y lista de ejercicios por revisar).
-- Estado: ¡Todos los pasos y fallos completados y verificados con pruebas unitarias y compilación!
+- Hecho: app base, base de ejercicios, perfil, motor de recomendación, entrenamiento
+  guiado, calorías, gráficas básicas, pruebas del motor (15) y arreglos de los fallos
+  1 al 9, 11 y 12.
+- Por confirmar: fallo 10 (fuente Inter en H y Btn de src/ui.js); no consta como hecho.
+- Pendiente: mejoras (e1RM y puntaje separado, Inicio, Progreso, Ajustes, salud y
+  lesiones, configuración y accesibilidad, almacenamiento por mes) e ideas (memoria y
+  tono de Atlas, explicación con fuente, manos libres, confianza, "tengo poco tiempo",
+  privacidad, tarjeta semanal).
