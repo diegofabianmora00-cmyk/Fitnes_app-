@@ -1,12 +1,25 @@
+const KEY = 'fitnesscoach:v1';
+const BACKUP_KEY = 'fitnesscoach:v1:backup';
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { exerciseById } from './exercises';
 
-const KEY = 'fitnesscoach:v1';
 export const uid = () => Math.random().toString(36).slice(2, 9);
 export const KG = 2.20462;
-export const toU = (kg, u) => Math.round((u === 'kg' ? kg : kg * KG) * 10) / 10;
-export const fromU = (v, u) => (u === 'kg' ? v : v / KG);
+export const toU = (kg, u) => {
+  if (kg == null) return kg;
+  const val = u === 'kg' ? kg : kg * KG;
+  if (u === 'lb') return Math.round(val * 2) / 2;
+  return Math.round(val * 10) / 10;
+};
+export const fromU = (v, u) => {
+  if (v == null || isNaN(v)) return 0;
+  if (u === 'lb') {
+    const lb = Math.round(v * 2) / 2;
+    return lb / KG;
+  }
+  return v;
+};
 
 export const PROFILE_DEFAULT = {
   completed: false,
@@ -86,8 +99,34 @@ export function StoreProvider({ children }) {
   useEffect(() => {
     AsyncStorage.getItem(KEY)
       .then((v) => {
-        if (!v) return;
-        const raw = JSON.parse(v);
+        if (!v) {
+          AsyncStorage.getItem(BACKUP_KEY).then((b) => {
+            if (!b) return;
+            try {
+              const raw = JSON.parse(b);
+              const merged = migrate(raw);
+              ref.current = merged;
+              setData(merged);
+            } catch (e) {}
+          }).catch(() => {});
+          return;
+        }
+        AsyncStorage.setItem(BACKUP_KEY, v).catch(() => {});
+        let raw;
+        try {
+          raw = JSON.parse(v);
+        } catch (e) {
+          AsyncStorage.getItem(BACKUP_KEY).then((b) => {
+            if (!b) return;
+            try {
+              const r = JSON.parse(b);
+              const merged = migrate(r);
+              ref.current = merged;
+              setData(merged);
+            } catch (e2) {}
+          }).catch(() => {});
+          return;
+        }
         const merged = migrate(raw);
         ref.current = merged;
         setData(merged);

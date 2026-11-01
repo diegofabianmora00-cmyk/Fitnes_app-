@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
-import { View } from 'react-native';
+const DRAFT_KEY = 'fitnesscoach:v1:draft';
+import React, { useEffect, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BackHandler, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,12 +29,29 @@ function Shell() {
   const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold });
   const [tab, setTab] = useState('home');
   const [routine, setRoutine] = useState(null);
+  const workoutBackRef = useRef(null);
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (routine) {
+        if (workoutBackRef.current) workoutBackRef.current();
+        return true;
+      }
+      if (tab !== 'home') {
+        setTab('home');
+        return true;
+      }
+      return false;
+    });
+    return () => sub.remove();
+  }, [routine, tab]);
+
   if (!ready || !fontsLoaded) return <View style={{ flex: 1, backgroundColor: C.bg }} />;
   const Screen = TABS.find((t) => t[0] === tab)[3];
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <View style={{ flex: 1, paddingTop: ins.top }}>
-        <View style={{ flex: 1 }} key={tab}><Screen go={setTab} start={setRoutine} /></View>
+        <View style={{ flex: 1 }}><Screen go={setTab} start={setRoutine} /></View>
         <View style={{ flexDirection: 'row', borderTopWidth: 1, borderColor: C.line, paddingTop: 8, paddingBottom: Math.max(ins.bottom, 10), backgroundColor: C.bg }}>
           {TABS.map(([id, label, icon]) => {
             const on = id === tab;
@@ -45,7 +64,7 @@ function Shell() {
           })}
         </View>
       </View>
-      {routine && <Workout routine={routine} onClose={() => setRoutine(null)} />}
+      {routine && <Workout routine={routine} workoutBackRef={workoutBackRef} onClose={() => { AsyncStorage.removeItem(DRAFT_KEY).catch(()=>{}); setRoutine(null); }} />}
       {!data.profile?.completed && <ProfileSetup />}
     </View>
   );

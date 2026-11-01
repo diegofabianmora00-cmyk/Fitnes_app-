@@ -1,5 +1,7 @@
+const DRAFT_KEY = 'fitnesscoach:v1:draft';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Animated, ScrollView, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Defs, LinearGradient as SvgGrad, Stop } from 'react-native-svg';
@@ -30,7 +32,7 @@ const initLog = (data, routine, u) => routine.exercises.map((ex) => {
   return { ex, rec, sets, manualWeightKg: null };
 });
 
-export default function Workout({ routine, onClose }) {
+export default function Workout({ routine, onClose, workoutBackRef }) {
   const { data, update } = useStore();
   const ins = useSafeAreaInsets();
   const u = data.unit;
@@ -51,7 +53,8 @@ export default function Workout({ routine, onClose }) {
   const [adjOpen, setAdjOpen] = useState(false);
   const [adjValue, setAdjValue] = useState(0);
   const [noHistWeight, setNoHistWeight] = useState(stepW);
-  const [reg, setReg] = useState({ r: '', w: '', rir: 2 });
+  const [reg, setReg] = useState({ r: '', w: '', rir: null });
+  const [regTouched, setRegTouched] = useState(false);
 
   useEffect(() => { Animated.spring(y, { toValue: 0, friction: 9, tension: 50, useNativeDriver: true }).start(); }, []);
   useEffect(() => {
@@ -68,15 +71,35 @@ export default function Workout({ routine, onClose }) {
   const effectiveWeightKg = cur.manualWeightKg != null ? cur.manualWeightKg : rec.weightKg;
 
   const close = () => Animated.timing(y, { toValue: 900, duration: 240, useNativeDriver: true }).start(onClose);
-  const closeAll = () => { setSaved(null); close(); };
+  const closeAll = () => { setSaved(null); AsyncStorage.removeItem(DRAFT_KEY).catch(()=>{}); close(); };
   const askClose = () => {
     if (log.some((b) => b.sets.some((s) => s.done))) {
-      Alert.alert('Salir del entrenamiento', 'Esta sesión no se guardará.', [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Salir', style: 'destructive', onPress: close },
+      Alert.alert('Salir del entrenamiento', 'Tienes series hechas. ¿Qué deseas hacer?', [
+        { text: 'Seguir entrenando', style: 'cancel' },
+        { text: 'Guardar lo hecho', onPress: () => { try { finishSession({ allowActive: true }); } catch(e) {} } },
+        { text: 'Descartar', style: 'destructive', onPress: () => { AsyncStorage.removeItem(DRAFT_KEY).catch(()=>{}); close(); } },
       ]);
-    } else close();
+    } else {
+      Alert.alert('Salir del entrenamiento', 'Todavía no has hecho ninguna serie. ¿Salir?', [
+        { text: 'Seguir entrenando', style: 'cancel' },
+        { text: 'Salir', style: 'destructive', onPress: () => { AsyncStorage.removeItem(DRAFT_KEY).catch(()=>{}); close(); } },
+      ]);
+    }
   };
+
+  const handleBack = () => {
+    if (adjOpen) { setAdjOpen(false); return true; }
+    if (why) { setWhy(null); return true; }
+    if (saved) { closeAll(); return true; }
+    askClose();
+    return true;
+  };
+
+  useEffect(() => {
+    if (!workoutBackRef) return;
+    workoutBackRef.current = handleBack;
+    return () => { if (workoutBackRef) workoutBackRef.current = null; };
+  });
 
   const updSet = (ei, si, patch) => setLog((a) => a.map((b, x) => (x !== ei ? b : { ...b, sets: b.sets.map((s, k) => (k !== si ? s : { ...s, ...patch })) })));
 
@@ -130,11 +153,11 @@ export default function Workout({ routine, onClose }) {
     const endedAt = Date.now();
     updSet(exIndex, setIndex, { endedAt, active: false });
     // prepare register
-    const s = cur.sets[setIndex];
-    const w = s.w;
-    const r = s.r;
-    const targetRir = Array.isArray(rec.rir) ? (rec.rir[1] ?? rec.rir[0] ?? 2) : 2;
-    setReg({ r: r || String(rec.targetReps || cur.ex.reps || ''), w: w || (effectiveWeightKg > 0 ? String(toU(effectiveWeightKg, u)) : ''), rir: targetRir });
+    const sSet = cur.sets[setIndex];
+    const w = sSet.w;
+    const r = sSet.r;
+    setReg({ r: '', w: w || (effectiveWeightKg > 0 ? String(toU(effectiveWeightKg, u)) : ''), rir: null });
+    setRegTouched(false);
     setPhase('register');
   };
 
@@ -145,6 +168,10 @@ export default function Workout({ routine, onClose }) {
   };
 
   const saveRegister = () => {
+    if (!regTouched) {
+      Alert.alert('Confirma la serie', 'Pulsa + o - para confirmar reps, peso o RIR.');
+      return;
+    }
     const s = cur.sets[setIndex];
     const startedAtTs = s.startedAt || startedAt || Date.now();
     const endedAtTs = s.endedAt || Date.now();
@@ -156,7 +183,17 @@ export default function Workout({ routine, onClose }) {
     const wDisp = String(reg.w).replace(',', '.');
     const wKg = fromU(parseFloat(wDisp) || 0, u);
     const rir = reg.rir === null || reg.rir === undefined || reg.rir === '' ? null : parseInt(reg.rir);
-    const rb = setIndex === 0 ? null : Math.round((startedAtTs - (cur.sets[setIndex - 1]?.endedAt || startedAtTs)) / 1000);
+    let rb = null;
+    if (setIndex !== 0) {
+      for (let i = setIndex - 1; i >= 0; i--) {
+        const pe = cur.sets[i];
+        if (pe && pe.endedAt) {
+          rb = Math.round((startedAtTs - pe.endedAt) / 1000);
+          break;
+        }
+      }
+      if (rb == null) rb = null;
+    }
     updSet(exIndex, setIndex, {
       w: reg.w,
       r: String(r),
@@ -187,9 +224,9 @@ export default function Workout({ routine, onClose }) {
     setPhase('start');
   };
 
-  const finishSession = () => {
+  const finishSession = (opts = {}) => {
     if (saved) return;
-    if (log.some((b) => b.sets.some((s) => s.active))) {
+    if (!opts.allowActive && log.some((b) => b.sets.some((s) => s.active))) {
       Alert.alert('Serie en curso', 'Termina o cancela la serie antes de guardar.');
       return;
     }
@@ -236,9 +273,18 @@ export default function Workout({ routine, onClose }) {
     workout.prs = records.map(({ exId, name, kind, weightKg, reps }) => ({ exId, name, kind, weightKg, reps }));
     workout.score = review;
     update((d) => ({ ...d, workouts: [workout, ...d.workouts] }));
-    setRest(null);
+    AsyncStorage.removeItem(DRAFT_KEY).catch(()=>{});
     setSaved({ review, records });
+    setPhase('review');
   };
+
+  useEffect(() => {
+    try {
+      if (log.some((b)=>b.sets.some((ss)=>ss.done))) {
+        AsyncStorage.setItem(DRAFT_KEY, JSON.stringify({ routine, exIndex, setIndex, phase, ts: Date.now() })).catch(()=>{});
+      }
+    } catch(e) {}
+  }, [log, exIndex, setIndex, phase]);
 
   const remainingRest = restStarted ? restTarget - Math.floor((now - restStarted) / 1000) : restTarget;
   const elapsedRest = restStarted ? Math.floor((now - restStarted) / 1000) : 0;
@@ -276,7 +322,7 @@ export default function Workout({ routine, onClose }) {
     </View>
   );
 
-  const Ring = ({ progress, center }) => (
+const Ring = ({ progress, center, C }) => (
     <View style={{ alignItems: 'center', justifyContent: 'center' }}>
       <Svg width={290} height={290}>
         <Defs>
@@ -295,7 +341,21 @@ export default function Workout({ routine, onClose }) {
     </View>
   );
 
+
   const commonPad = { paddingTop: ins.top + 10, paddingHorizontal: 22, paddingBottom: Math.max(ins.bottom, 0) + 28 };
+
+  if (phase === 'review') {
+    return (
+      <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: C.bg }}>
+        <SessionReview
+          visible={!!saved}
+          review={saved ? saved.review : null}
+          records={saved ? saved.records : []}
+          onClose={closeAll}
+        />
+      </View>
+    );
+  }
 
   if (phase === 'recommend') {
     const noHist = !rec.weightKg && rec.weightKg !== 0; // null
@@ -307,7 +367,7 @@ export default function Workout({ routine, onClose }) {
         <LinearGradient colors={[C.bgTop, C.bgBot]} locations={[0, 0.38]} style={{ flex: 1, ...commonPad }}>
           <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
             <View style={{ gap: 16, flex: 1 }}>
-              <Press onPress={askClose} style={{ alignSelf: 'flex-start', padding: 4 }}><Ionicons name="chevron-down" size={26} color={C.mute} /></Press>
+              <Press onPress={askClose} hitSlop={12} style={{ alignSelf: 'flex-start', padding: 10, minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="chevron-down" size={26} color={C.mute} /></Press>
               {renderHeader(cur.ex.name, `Serie ${setIndex + 1} de ${totalSets}`, totalSets)}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <Coach mood="neutral" size="sm" />
@@ -320,11 +380,11 @@ export default function Workout({ routine, onClose }) {
                 {noHist ? (
                   <View style={{ marginTop: 8 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Press onPress={() => setNoHistWeight((v) => Math.max(0, Math.round((v - stepW) * 10) / 10))} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
+                      <Press onPress={() => setNoHistWeight((v) => Math.max(0, Math.round((v - stepW) * 10) / 10))} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
                         <Ionicons name="remove" size={22} color={C.text} />
                       </Press>
                       <T style={{ fontSize: 38, fontWeight: '700', letterSpacing: -1.1, fontVariant: ['tabular-nums'], flex: 1, textAlign: 'center' }}>{noHistWeight.toString().replace('.', ',')}</T>
-                      <Press onPress={() => setNoHistWeight((v) => Math.round((v + stepW) * 10) / 10)} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
+                      <Press onPress={() => setNoHistWeight((v) => Math.round((v + stepW) * 10) / 10)} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
                         <Ionicons name="add" size={22} color={C.text} />
                       </Press>
                     </View>
@@ -397,13 +457,13 @@ export default function Workout({ routine, onClose }) {
         <LinearGradient colors={[C.bgTop, C.bgBot]} locations={[0, 0.38]} style={{ flex: 1, ...commonPad }}>
           <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
             <View style={{ gap: 16, flex: 1 }}>
-              <Press onPress={askClose} style={{ alignSelf: 'flex-start', padding: 4 }}><Ionicons name="chevron-down" size={26} color={C.mute} /></Press>
+              <Press onPress={askClose} hitSlop={12} style={{ alignSelf: 'flex-start', padding: 10, minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="chevron-down" size={26} color={C.mute} /></Press>
               {renderHeader(cur.ex.name, `Serie ${setIndex + 1} de ${totalSets}`, totalSets)}
               <View style={{ alignItems: 'center' }}>
                 <Coach mood="neutral" size="sm" />
               </View>
               <View style={{ alignItems: 'center', marginVertical: 8 }}>
-                <Ring progress={0} center={
+                <Ring C={C} progress={0} center={
                   <LinearGradient colors={[C.gradPlay0, C.gradPlay1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ width: 112, height: 112, borderRadius: 56, alignItems: 'center', justifyContent: 'center' }}>
                     <Press onPress={() => startRunning(setIndex)} style={{ width: 112, height: 112, borderRadius: 56, alignItems: 'center', justifyContent: 'center' }}>
                       <Ionicons name="play" size={46} color={C.playTriangle} />
@@ -434,13 +494,13 @@ export default function Workout({ routine, onClose }) {
         <LinearGradient colors={[C.bgTop, C.bgBot]} locations={[0, 0.38]} style={{ flex: 1, ...commonPad }}>
           <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
             <View style={{ gap: 16, flex: 1 }}>
-              <Press onPress={askClose} style={{ alignSelf: 'flex-start', padding: 4 }}><Ionicons name="chevron-down" size={26} color={C.mute} /></Press>
+              <Press onPress={askClose} hitSlop={12} style={{ alignSelf: 'flex-start', padding: 10, minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="chevron-down" size={26} color={C.mute} /></Press>
               {renderHeader(cur.ex.name, `Serie ${setIndex + 1} de ${totalSets}`, totalSets)}
               <View style={{ alignItems: 'center' }}>
                 <Coach mood="neutral" size="sm" />
               </View>
               <View style={{ alignItems: 'center', marginVertical: 8 }}>
-                <Ring progress={progress} center={
+                <Ring C={C} progress={progress} center={
                   <View style={{ alignItems: 'center' }}>
                     <T style={{ fontSize: 14, color: C.mute }}>Tiempo habitual 25 a 45 s</T>
                     <T style={{ fontSize: 64, fontWeight: '700', letterSpacing: -1.9, fontVariant: ['tabular-nums'], marginTop: 4 }}>{mm(secs)}</T>
@@ -473,7 +533,7 @@ export default function Workout({ routine, onClose }) {
         <LinearGradient colors={[C.bgTop, C.bgBot]} locations={[0, 0.38]} style={{ flex: 1, ...commonPad }}>
           <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
             <View style={{ gap: 16, flex: 1 }}>
-              <Press onPress={askClose} style={{ alignSelf: 'flex-start', padding: 4 }}><Ionicons name="chevron-down" size={26} color={C.mute} /></Press>
+              <Press onPress={askClose} hitSlop={12} style={{ alignSelf: 'flex-start', padding: 10, minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="chevron-down" size={26} color={C.mute} /></Press>
               {renderHeader(cur.ex.name, 'Registra tu serie', totalSets)}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <Coach mood={mood} size="sm" />
@@ -487,14 +547,14 @@ export default function Workout({ routine, onClose }) {
                   <View>
                     <T style={{ fontSize: 13, color: C.mute }}>Reps</T>
                     <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 2 }}>
-                      <T style={{ fontSize: 38, fontWeight: '700', letterSpacing: -1.1, fontVariant: ['tabular-nums'] }}>{reg.r}</T>
+                      <T style={{ fontSize: 38, fontWeight: '700', letterSpacing: -1.1, fontVariant: ['tabular-nums'] }}>{reg.r === '' ? '-' : reg.r}</T>
                     </View>
                   </View>
                   <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <Press onPress={() => setReg((p) => ({ ...p, r: String(Math.max(0, (parseInt(p.r) || 0) - 1)) }))} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
+                    <Press onPress={() => { setRegTouched(true); setReg((p) => ({ ...p, r: String(Math.max(0, (parseInt(p.r) || 0) - 1)) })); }} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
                       <Ionicons name="remove" size={22} color={C.text} />
                     </Press>
-                    <Press onPress={() => setReg((p) => ({ ...p, r: String((parseInt(p.r) || 0) + 1) }))} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
+                    <Press onPress={() => { setRegTouched(true); setReg((p) => ({ ...p, r: String((parseInt(p.r) || 0) + 1) })); }} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
                       <Ionicons name="add" size={22} color={C.text} />
                     </Press>
                   </View>
@@ -511,10 +571,10 @@ export default function Workout({ routine, onClose }) {
                     </View>
                   </View>
                   <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <Press onPress={() => setReg((p) => ({ ...p, w: String(Math.max(0, Math.round(((parseFloat(String(p.w).replace(',', '.')) || 0) - stepW) * 10) / 10)) }))} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
+                    <Press onPress={() => { setRegTouched(true); setReg((p) => ({ ...p, w: String(Math.max(0, Math.round(((parseFloat(String(p.w).replace(',', '.')) || 0) - stepW) * 10) / 10)) })); }} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
                       <Ionicons name="remove" size={22} color={C.text} />
                     </Press>
-                    <Press onPress={() => setReg((p) => ({ ...p, w: String(Math.round(((parseFloat(String(p.w).replace(',', '.')) || 0) + stepW) * 10) / 10) }))} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
+                    <Press onPress={() => { setRegTouched(true); setReg((p) => ({ ...p, w: String(Math.round(((parseFloat(String(p.w).replace(',', '.')) || 0) + stepW) * 10) / 10) })); }} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
                       <Ionicons name="add" size={22} color={C.text} />
                     </Press>
                   </View>
@@ -530,10 +590,10 @@ export default function Workout({ routine, onClose }) {
                     </View>
                   </View>
                   <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <Press onPress={() => setReg((p) => ({ ...p, rir: p.rir === null ? 0 : Math.max(0, p.rir - 1) }))} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
+                    <Press onPress={() => { setRegTouched(true); setReg((p) => ({ ...p, rir: p.rir === null ? 0 : Math.max(0, p.rir - 1) })); }} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
                       <Ionicons name="remove" size={22} color={C.text} />
                     </Press>
-                    <Press onPress={() => setReg((p) => ({ ...p, rir: p.rir === null ? 1 : Math.min(5, p.rir + 1) }))} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
+                    <Press onPress={() => { setRegTouched(true); setReg((p) => ({ ...p, rir: p.rir === null ? 1 : Math.min(5, p.rir + 1) })); }} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
                       <Ionicons name="add" size={22} color={C.text} />
                     </Press>
                   </View>
@@ -563,7 +623,7 @@ export default function Workout({ routine, onClose }) {
         <LinearGradient colors={[C.bgTop, C.bgBot]} locations={[0, 0.38]} style={{ flex: 1, ...commonPad }}>
           <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
             <View style={{ gap: 16, flex: 1 }}>
-              <Press onPress={askClose} style={{ alignSelf: 'flex-start', padding: 4 }}><Ionicons name="chevron-down" size={26} color={C.mute} /></Press>
+              <Press onPress={askClose} hitSlop={12} style={{ alignSelf: 'flex-start', padding: 10, minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="chevron-down" size={26} color={C.mute} /></Press>
               {renderHeader('Descanso', `Después de la serie ${completedSets}`, totalSets)}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <Coach mood={restAlert ? 'alert' : 'neutral'} size="sm" />
@@ -576,7 +636,7 @@ export default function Workout({ routine, onClose }) {
                 </View>
               </View>
               <View style={{ alignItems: 'center', marginVertical: 8 }}>
-                <Ring progress={progress} center={
+                <Ring C={C} progress={progress} center={
                   <View style={{ alignItems: 'center' }}>
                     <T style={{ fontSize: 14, color: C.mute }}>Descansando</T>
                     <T style={{ fontSize: 64, fontWeight: '700', letterSpacing: -1.9, fontVariant: ['tabular-nums'], marginTop: 4 }}>{mm(elapsedRest)}</T>
@@ -674,11 +734,11 @@ export default function Workout({ routine, onClose }) {
         <View style={{ backgroundColor: C.bg, borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 18, paddingBottom: Math.max(ins.bottom, 16) }}>
           <T style={{ fontSize: 20, fontWeight: '700', marginBottom: 12 }}>Ajustar peso</T>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-            <Press onPress={() => setAdjValue((v) => Math.max(0, Math.round((v - stepW) * 10) / 10))} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
+            <Press onPress={() => setAdjValue((v) => Math.max(0, Math.round((v - stepW) * 10) / 10))} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
               <Ionicons name="remove" size={22} color={C.text} />
             </Press>
             <T style={{ flex: 1, textAlign: 'center', fontSize: 38, fontWeight: '700', fontVariant: ['tabular-nums'] }}>{adjValue.toString().replace('.', ',')}</T>
-            <Press onPress={() => setAdjValue((v) => Math.round((v + stepW) * 10) / 10)} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
+            <Press onPress={() => setAdjValue((v) => Math.round((v + stepW) * 10) / 10)} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
               <Ionicons name="add" size={22} color={C.text} />
             </Press>
           </View>
