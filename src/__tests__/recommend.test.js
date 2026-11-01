@@ -1,5 +1,6 @@
 import {
   addLoadStep,
+  confidence,
   kgFromLoad,
   loadFromKg,
   loadMinFor,
@@ -79,7 +80,7 @@ describe('recommendFor', () => {
       expect(res.weightKg).toBeNull();
       expect(res.primaryRule.id).toBe('start');
       expect(res.sessions).toBe(0);
-      expect(res.confidence).toBe('none');
+      expect(res.confidence).toBe('baja');
     });
 
     it('para peso corporal sin historial tambien recomienda start', () => {
@@ -205,5 +206,61 @@ describe('ejercicios de peso corporal', () => {
     );
     expect(res.action).toBe('maintain');
     expect(res.weightKg).toBe(0);
+  });
+});
+
+describe('confidence y comportamiento conservador', () => {
+  it('calcula la confianza correctamente segun sesiones con series confirmadas', () => {
+    // 0 sesiones
+    const d0 = data([]);
+    expect(confidence(d0, 'press-banca')).toEqual({ sesiones: 0, necesarias: 4, nivel: 'baja' });
+
+    // 1 sesión confirmada
+    const d1 = data([makeWorkout(NOW, [makeSet(60, 8)])]);
+    expect(confidence(d1, 'press-banca')).toEqual({ sesiones: 1, necesarias: 4, nivel: 'baja' });
+
+    // 2 sesiones confirmadas -> media
+    const d2 = data([
+      makeWorkout(NOW, [makeSet(60, 8)]),
+      makeWorkout(NOW - 3 * DAY, [makeSet(60, 8)]),
+    ]);
+    expect(confidence(d2, 'press-banca')).toEqual({ sesiones: 2, necesarias: 4, nivel: 'media' });
+
+    // 3 sesiones confirmadas -> media
+    const d3 = data([
+      makeWorkout(NOW, [makeSet(60, 8)]),
+      makeWorkout(NOW - 3 * DAY, [makeSet(60, 8)]),
+      makeWorkout(NOW - 6 * DAY, [makeSet(60, 8)]),
+    ]);
+    expect(confidence(d3, 'press-banca')).toEqual({ sesiones: 3, necesarias: 4, nivel: 'media' });
+
+    // 4 sesiones confirmadas -> alta
+    const d4 = data([
+      makeWorkout(NOW, [makeSet(60, 8)]),
+      makeWorkout(NOW - 3 * DAY, [makeSet(60, 8)]),
+      makeWorkout(NOW - 6 * DAY, [makeSet(60, 8)]),
+      makeWorkout(NOW - 9 * DAY, [makeSet(60, 8)]),
+    ]);
+    expect(confidence(d4, 'press-banca')).toEqual({ sesiones: 4, necesarias: 4, nivel: 'alta' });
+  });
+
+  it('no suma series sin confirmar para la confianza', () => {
+    const dUnconfirmed = data([
+      makeWorkout(NOW, [makeSet(60, 10, 2, true)]), // unconfirmed
+      makeWorkout(NOW - 3 * DAY, [makeSet(60, 8)]), // confirmed
+    ]);
+    const conf = confidence(dUnconfirmed, 'press-banca');
+    expect(conf.sesiones).toBe(1);
+    expect(conf.nivel).toBe('baja');
+  });
+
+  it('aplica recomendacion conservadora con confianza baja (1 sesion)', () => {
+    const res = recommendFor(
+      data([makeWorkout(NOW, [makeSet(60, 10, 2)])]), // 1 sesion previa
+      makeEx(),
+    );
+    expect(res.confidence).toBe('baja');
+    expect(res.text.toLowerCase()).toContain('aún tengo pocos datos');
+    expect(res.rules.some((r) => r.id === 'lowConfidence')).toBe(true);
   });
 });

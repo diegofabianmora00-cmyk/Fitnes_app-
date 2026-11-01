@@ -9,7 +9,7 @@ import { C } from '../theme';
 import { Btn, Card, Press, T } from '../ui';
 import { fromU, KEYS, lastSets, toU, uid, useStore } from '../store';
 import { exerciseById } from '../exercises';
-import { addLoadStep, exerciseReview, GOALS, labelOf, LEVELS, newRecords, recommendFor, roundLoad, RULES, sessionReview, subLoadStep } from '../recommend';
+import { addLoadStep, confidence, exerciseReview, GOALS, labelOf, LEVELS, newRecords, recommendFor, roundLoad, RULES, sessionReview, subLoadStep } from '../recommend';
 import Coach from '../Coach';
 import RuleInfo from '../RuleInfo';
 import SessionReview from '../SessionReview';
@@ -495,6 +495,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
   }
 
   if (phase === 'recommend') {
+    const conf = confidence(data, cur.ex.id);
     const insufficient = rec.sessions === 0 || (rec.weightKg == null && !bodyweight);
     const bodyweight = rec.weightKg === 0;
     const rirTarget = Array.isArray(rec.rir) ? (rec.rir[1] ?? rec.rir[0] ?? 2) : 2;
@@ -503,7 +504,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
     const levelLabel = labelOf(LEVELS, data.profile && data.profile.level);
     const coachText = insufficient
       ? `No tengo registros previos de este ejercicio en tu historial (0 sesiones). Como tu objetivo es ${goalLabel.toLowerCase()} y tu nivel es ${levelLabel.toLowerCase()}, la información que tengo no es suficiente como para sugerirte un peso. Elige un peso libre con el que puedas mantener RIR 2-3.`
-      : (recCoachMsg || `Basado en tu historial (${rec.sessions} ${rec.sessions === 1 ? 'sesión' : 'sesiones'}) y tu objetivo de ${goalLabel.toLowerCase()} (${levelLabel.toLowerCase()}), te sugiero ${bodyweight ? 'peso corporal' : `${toU(rec.weightKg, u)} ${u}`} para ${rec.targetReps} reps con RIR ${rirTarget}.`);
+      : (recCoachMsg || `Basado en tu historial (${conf.sesiones} ${conf.sesiones === 1 ? 'sesión' : 'sesiones'}) y tu objetivo de ${goalLabel.toLowerCase()} (${levelLabel.toLowerCase()}), te sugiero ${bodyweight ? 'peso corporal' : `${toU(rec.weightKg, u)} ${u}`} para ${rec.targetReps} reps con RIR ${rirTarget}.`);
 
     return (
       <Animated.View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, transform: [{ translateY: y }] }}>
@@ -512,6 +513,30 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
             <View style={{ gap: 16, flex: 1 }}>
               <Press onPress={askClose} hitSlop={12} style={{ alignSelf: 'flex-start', padding: 10, minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="chevron-down" size={26} color={C.mute} /></Press>
               {renderHeader(cur.ex.name, `Serie ${setIndex + 1} de ${totalSets}`, totalSets)}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 }}>
+                <T style={{ fontSize: 13, color: C.mute }}>
+                  {conf.sesiones === 0
+                    ? 'Primera vez: parto de un cálculo general'
+                    : conf.nivel === 'alta'
+                    ? 'Recomendación ajustada a ti'
+                    : `Aún estoy aprendiendo de ti: ${conf.sesiones} de ${conf.necesarias} sesiones`}
+                </T>
+                {conf.sesiones > 0 && conf.nivel !== 'alta' && (
+                  <View style={{ flexDirection: 'row', gap: 4 }}>
+                    {Array.from({ length: conf.necesarias }, (_, i) => (
+                      <View
+                        key={i}
+                        style={{
+                          width: 14,
+                          height: 5,
+                          borderRadius: 2.5,
+                          backgroundColor: i < conf.sesiones ? C.accent : C.track,
+                        }}
+                      />
+                    ))}
+                  </View>
+                )}
+              </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <Coach mood="neutral" size="sm" />
                 <View style={{ flex: 1, backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: C.line, paddingVertical: 12, paddingHorizontal: 14 }}>

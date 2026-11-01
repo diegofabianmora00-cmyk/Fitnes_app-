@@ -209,7 +209,55 @@ export const RULES = {
     source: SOURCES.app,
     kind: 'app',
   },
+  lowConfidence: {
+    id: 'lowConfidence',
+    title: 'Confianza inicial baja',
+    detail:
+      'Con pocos datos (menos de 2 sesiones), la app mantiene una progresión muy conservadora (máximo un paso de disco) y aún tengo pocos datos sobre ti.',
+    source: SOURCES.app,
+    kind: 'app',
+  },
 };
+
+export const CONFIDENCE_NEEDED = 4;
+
+export function confidence(historial = [], ejercicioId) {
+  let workouts = [];
+  if (historial && !Array.isArray(historial) && Array.isArray(historial.workouts)) {
+    workouts = historial.workouts;
+  } else if (Array.isArray(historial)) {
+    workouts = historial;
+  }
+
+  let sessionsCount = 0;
+  if (ejercicioId) {
+    if (workouts.length > 0 && workouts[0] && workouts[0].exercises) {
+      const history = sessionHistory({ workouts }, ejercicioId);
+      sessionsCount = history.length;
+    } else if (workouts.length > 0 && workouts[0] && workouts[0].sets) {
+      sessionsCount = workouts.filter((s) => (s.sets || []).filter((st) => Number(st.r) > 0 && !st.unconfirmed).length > 0).length;
+    } else if (historial && historial.workouts) {
+      const history = sessionHistory(historial, ejercicioId);
+      sessionsCount = history.length;
+    }
+  }
+
+  const necesarias = CONFIDENCE_NEEDED;
+  let nivel = 'baja';
+  if (sessionsCount >= 4) {
+    nivel = 'alta';
+  } else if (sessionsCount >= 2) {
+    nivel = 'media';
+  } else {
+    nivel = 'baja';
+  }
+
+  return {
+    sesiones: sessionsCount,
+    necesarias,
+    nivel,
+  };
+}
 
 export function repRangeFor(profile = {}) {
   const goal = profile.goal || 'hipertrofia';
@@ -396,6 +444,28 @@ export function recommendFor(data = {}, ex = {}) {
     ...RULES.rest,
     detail: `Para ${type} y tu objetivo, descansa ${mm(restSec)}. ${RULES.rest.detail}`,
   };
+  const conf = confidence(data, ex.id);
+  const isLowConfidence = conf.nivel === 'baja' && history.length === 1;
+
+  const finalize = (res) => {
+    const out = {
+      ...res,
+      sessions: conf.sesiones,
+      confidence: conf.nivel,
+    };
+    if (isLowConfidence) {
+      const textHasData = out.text.includes('aún tengo pocos datos') || out.text.includes('poca información') || out.text.includes('pocos datos');
+      const updatedText = textHasData ? out.text : `En ${name}, aún tengo pocos datos (1 sesión). ${out.text}`;
+      const rules = uniqRules([...(out.rules || []), RULES.lowConfidence]);
+      out.text = updatedText;
+      out.rules = rules;
+      if (out.primaryRule?.id === 'start' || !out.primaryRule) {
+        out.primaryRule = RULES.lowConfidence;
+      }
+    }
+    return out;
+  };
+
   const base = {
     id: ex.id,
     exerciseName: name,
@@ -417,20 +487,20 @@ export function recommendFor(data = {}, ex = {}) {
     text: '',
     rules: [repRule, restRule],
     primaryRule: RULES.start,
-    sessions: history.length,
-    confidence: history.length >= 6 ? 'high' : history.length >= 3 ? 'medium' : history.length ? 'low' : 'none',
+    sessions: conf.sesiones,
+    confidence: conf.nivel,
     trend: 'flat',
     warning,
     restInsight: null,
   };
 
   if (!history.length) {
-    return {
+    return finalize({
       ...base,
       text: `Elige un peso con el que completes ${range.min}-${range.max} repeticiones dejando 2 en reserva. Descansa ${mm(restSec)}.`,
       rules: [repRule, restRule, RULES.start],
       primaryRule: RULES.start,
-    };
+    });
   }
 
   const last = history[0];
@@ -457,7 +527,7 @@ export function recommendFor(data = {}, ex = {}) {
 
   if (top <= 0) {
     if (info.met && info.best >= range.max) {
-      return {
+      return finalize({
         ...base,
         action: 'maintain',
         weightKg: 0,
@@ -467,12 +537,12 @@ export function recommendFor(data = {}, ex = {}) {
         text: `En ${name} ya haces ${info.best} reps, el tope del rango. Mantén y añade un poco de lastre cuando puedas.`,
         rules: [repRule, RULES.bodyweight],
         primaryRule: RULES.bodyweight,
-      };
+      });
     }
     const nextTarget = info.met
       ? Math.min(Math.max(baseTarget + 1, info.best + 1), range.max)
       : baseTarget;
-    return {
+    return finalize({
       ...base,
       action: 'maintain',
       weightKg: 0,
@@ -484,7 +554,7 @@ export function recommendFor(data = {}, ex = {}) {
         : `En ${name} no hay peso externo. Busca completar ${nextTarget} reps con buena técnica.`,
       rules: [repRule, RULES.bodyweight],
       primaryRule: RULES.bodyweight,
-    };
+    });
   }
 
   let streak = 0;
@@ -500,7 +570,7 @@ export function recommendFor(data = {}, ex = {}) {
     const pct = topLoad > 0 ? stepLoad / topLoad : 0;
     if (pct > 0.1 && baseTarget < range.max) {
       const nextTarget = Math.min(baseTarget + 1, range.max);
-      return {
+      return finalize({
         ...base,
         action: 'maintain',
         weightKg: topKg,
@@ -510,11 +580,11 @@ export function recommendFor(data = {}, ex = {}) {
         text: `En ${name}, mantén ${weightText(topKg)} y busca ${nextTarget} reps. El siguiente salto de peso sería más del 10%; primero exprime el rango.`,
         rules: [repRule, restRule, RULES.progression, RULES.load],
         primaryRule: RULES.progression,
-      };
+      });
     }
     const nextLoad = addLoadStep(topLoad, unit);
     const next = kgFromLoad(nextLoad, unit);
-    return {
+    return finalize({
       ...base,
       action: 'up',
       weightKg: next,
@@ -525,11 +595,11 @@ export function recommendFor(data = {}, ex = {}) {
         : `En ${name}, sube a ${weightText(next)}. Llevas ${streak} sesión${streak === 1 ? '' : 'es'} cumpliendo el objetivo.`,
       rules: [repRule, restRule, RULES.progression, RULES.load],
       primaryRule: RULES.progression,
-    };
+    });
   }
 
   if (stall.stall) {
-    return {
+    return finalize({
       ...base,
       action: 'stall',
       weightKg: topKg,
@@ -539,11 +609,11 @@ export function recommendFor(data = {}, ex = {}) {
       text: `Llevas ${stall.reason} con ${name} en ${weightText(topKg)} sin mejorar. Mantén el peso y revisa sueño, comida y técnica.`,
       rules: [repRule, restRule, RULES.stall],
       primaryRule: RULES.stall,
-    };
+    });
   }
 
   if (info.met && !info.margin) {
-    return {
+    return finalize({
       ...base,
       action: 'maintain',
       weightKg: topKg,
@@ -552,11 +622,11 @@ export function recommendFor(data = {}, ex = {}) {
       text: `En ${name}, mantén ${weightText(topKg)}. Llegaste al objetivo, pero al fallo o sin margen; busca 1 repetición en reserva antes de subir.`,
       rules: [repRule, RULES.progression, RULES.rir],
       primaryRule: RULES.rir,
-    };
+    });
   }
 
   if (info.met && info.margin) {
-    return {
+    return finalize({
       ...base,
       action: 'maintain',
       weightKg: topKg,
@@ -565,10 +635,10 @@ export function recommendFor(data = {}, ex = {}) {
       text: `En ${name}, mantén ${weightText(topKg)} una sesión más. Llevas ${streak} de ${need} sesiones para subir.`,
       rules: [repRule, RULES.progression],
       primaryRule: RULES.progression,
-    };
+    });
   }
 
-  return {
+  return finalize({
     ...base,
     action: 'maintain',
     weightKg: topKg,
@@ -577,7 +647,7 @@ export function recommendFor(data = {}, ex = {}) {
     text: `En ${name}, mantén ${weightText(topKg)} y busca una repetición más por serie.`,
     rules: [repRule, RULES.progression],
     primaryRule: RULES.progression,
-  };
+  });
 }
 
 export function personalRecords(data = {}, exId) {
