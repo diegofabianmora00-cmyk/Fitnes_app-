@@ -35,6 +35,8 @@ no los crees ni los edites.
   guardado de la sesión, PR y resumen.
 - src/screens/Progress.js: estadísticas, gráfica de barras por ejercicio, historial.
 - src/screens/Settings.js: kg/lb, editar perfil, exportar, borrar datos.
+- jest.config.js: preset 'jest-expo' para pruebas.
+- src/__tests__/recommend.test.js: pruebas unitarias del motor puro (jest).
 - docs/decisiones.md: reglas del motor (progresión, estancamiento, descanso, PR, puntaje).
   Léelo ANTES de tocar recommend.js o el puntaje/PR de Workout.js y SessionReview.js.
 - docs/diseno-entrenamiento.md: diseño visual del flujo de entrenamiento. Léelo solo si
@@ -57,7 +59,10 @@ workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName,
   prs: [{ exId, name, kind, weightKg, reps }],
   score: { score, grade, components, restNotes, durationSec },
   exercises: [{ exId, name, targetReps, targetSets, targetRestSec, recWeightKg,
-    sets: [{ w, r, rir, failure, startedAt, endedAt, restBeforeSec, pr }] }] }] }
+    sets: [{ w, r, rir, failure, startedAt, endedAt, restBeforeSec, pr,
+      confirmed: { r, w, rir }, unconfirmed }] }] }] }
+// sets sin `unconfirmed` son datos viejos válidos; `unconfirmed: true` los excluye de
+// motor, PR y puntaje. Pesos en kg; unit ausente se lee como kg.
 // workouts: el más reciente primero. El id del ejercicio es el de src/exercises.js.
 
 ## Reglas
@@ -85,8 +90,16 @@ workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName,
 - Usa los componentes de src/ui.js y los colores de src/theme.js.
 - Si creas, renombras o borras un archivo, actualiza el Mapa. Al terminar un paso,
   actualiza el Estado.
+  - Busca cada tarea por su descripción: los números de línea pueden haber cambiado.
+  Si algo ya está resuelto, dilo y no lo toques.
+- Los datos ya guardados en el celular deben seguir funcionando (lee también los
+  formatos antiguos; los datos viejos sin unidad se leen como kg).
+- No cambies nada que la tarea no pida. Si tomas una decisión que no estaba indicada, dila al final.
+- Al terminar: tabla tarea | archivos modificados | estado (hecho / parcial / no hecho),
+  y la lista de archivos nuevos y modificados para el commit.
 
 ## Estado
+- Hecho: pruebas unitarias con jest-expo para recommend.js (15 tests) y limpieza de dead code en Workout.js; regla rota a prop�sito y restaurada.
 - Hecho: app base; paso 1 base de ejercicios y selector; paso 2 cuestionario/perfil;
   paso 3 motor de recomendación; paso 4 entrenamiento guiado paso a paso (anillo SVG,
   steppers, descanso real, kcal por ejercicio, puntaje por ejercicio).
@@ -94,7 +107,9 @@ workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName,
   "Salir" con guardar/sseguir/descartar; resumen y PR visibles).
 - Hecho: fallos 3 y 5 (borrador de entreno con continuar/descartar y respaldo de datos
   corruptos con copia válida y alerta; botón de simulación en desarrollo).
-- En curso: resto de los 12 fallos conocidos. Importantes: descanso al saltar serie,
-  Ring fuera del componente, datos sin confirmar, unidades lb, fuente Inter, pestañas
-  montadas, botones de 48 px.
+- Hecho: parte 3 (fallos 6-9): descanso con el último endedAt válido (null si no hay),
+  Ring memoizado fuera del componente y cronómetro cada 1 s con Date.now(), series con
+  campos sin confirmar ignoradas por motor/PR/puntaje, y pesos redondeados en la unidad
+  del usuario (kg 2,5 / lb 5) con PR por tolerancia de 0,01 kg.
+- En curso: resto de los fallos conocidos (pestañas montadas, botones de 48 px y otros).
 - Siguiente: paso 5 calorías visibles, paso 6 gráficas de progreso y estancados.

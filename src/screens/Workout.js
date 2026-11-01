@@ -6,25 +6,65 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Defs, LinearGradient as SvgGrad, Stop } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C } from '../theme';
-import { Btn, Card, Field, Press, T } from '../ui';
+import { Btn, Card, Press, T } from '../ui';
 import { fromU, KEYS, lastSets, toU, uid, useStore } from '../store';
 import { exerciseById } from '../exercises';
-import { exerciseReview, newRecords, recommendFor, RULES, sessionReview } from '../recommend';
+import { addLoadStep, exerciseReview, newRecords, recommendFor, roundLoad, RULES, sessionReview, subLoadStep } from '../recommend';
 import Coach from '../Coach';
 import RuleInfo from '../RuleInfo';
 import SessionReview from '../SessionReview';
 
 const mm = (s) => `${Math.floor(s / 60)}:${String(Math.abs(Math.floor(s)) % 60).padStart(2, '0')}`;
 
+const targetRir = (rec) => (Array.isArray(rec.rir) ? (rec.rir[1] ?? rec.rir[0] ?? 2) : 2);
+
+const lastRestSec = (sets, index, startedAtTs) => {
+  for (let i = index - 1; i >= 0; i--) {
+    const prev = sets[i];
+    if (prev && prev.done && Number.isFinite(prev.endedAt)) {
+      const sec = Math.round((startedAtTs - prev.endedAt) / 1000);
+      return sec >= 0 ? sec : null;
+    }
+  }
+  return null;
+};
+
+const Ring = React.memo(function Ring({ progress, center }) {
+  return (
+    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={290} height={290}>
+        <Defs>
+          <SvgGrad id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor={C.gradRing0} />
+            <Stop offset="1" stopColor={C.gradRing1} />
+          </SvgGrad>
+        </Defs>
+        <Circle cx={145} cy={145} r={128} stroke={C.ringTrack} strokeWidth={14} fill="none" />
+        <Circle cx={145} cy={145} r={128} stroke="url(#ringGrad)" strokeWidth={14} fill="none" strokeLinecap="round"
+          strokeDasharray={`${Math.max(0, Math.min(1, progress)) * 804} 804`} transform="rotate(-90 145 145)" />
+      </Svg>
+      <View style={{ position: 'absolute', alignItems: 'center', justifyContent: 'center' }}>
+        {center}
+      </View>
+    </View>
+  );
+});
+
 const DRAFT_KEY = KEYS.draft;
 
 const initLog = (data, routine, u) => routine.exercises.map((ex) => {
   const rec = recommendFor(data, ex);
   const prev = lastSets(data, ex.id);
+  const suggestedWeight = rec.weightKg == null ? '' : (rec.weightKg > 0 ? String(toU(rec.weightKg, u)) : '');
+  const suggestedReps = String(rec.targetReps || ex.reps || '');
+  const suggestedRir = targetRir(rec);
+  const bodyweight = rec.weightKg === 0;
   const sets = Array.from({ length: ex.sets }, (_, i) => ({
-    w: rec.weightKg == null ? '' : (rec.weightKg > 0 ? String(toU(rec.weightKg, u)) : ''),
-    r: prev[i] ? String(prev[i].r) : '',
-    rir: null,
+    w: suggestedWeight,
+    r: prev[i] ? String(prev[i].r) : suggestedReps,
+    rir: suggestedRir,
+    confirmed: { r: false, w: bodyweight, rir: false },
+    unconfirmed: true,
     startedAt: null,
     endedAt: null,
     restBeforeSec: null,
@@ -52,12 +92,16 @@ const restoreLog = (draftLog, routine, data, u) => {
       const s = saved.sets[k];
       if (!s) return ds;
       const done = !!s.done;
+      const confirmed = s.confirmed || { r: done, w: done, rir: done };
+      const unconfirmed = s.unconfirmed != null ? !!s.unconfirmed : !(confirmed.r && confirmed.w && confirmed.rir);
       return {
         ...ds,
         ...s,
         done,
         active: false,
         rir: s.rir == null ? null : s.rir,
+        confirmed,
+        unconfirmed,
         startedAt: done ? (s.startedAt || null) : null,
         endedAt: done ? (s.endedAt || null) : null,
       };
@@ -98,12 +142,12 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
   const [adjValue, setAdjValue] = useState(0);
   const [noHistWeight, setNoHistWeight] = useState(stepW);
   const [reg, setReg] = useState({ r: '', w: '', rir: null });
-  const [regTouched, setRegTouched] = useState(false);
+  const [regConfirmed, setRegConfirmed] = useState({ r: false, w: false, rir: false });
 
   useEffect(() => { Animated.spring(y, { toValue: 0, friction: 9, tension: 50, useNativeDriver: true }).start(); }, []);
   useEffect(() => {
     if (phase === 'running' || phase === 'rest') {
-      const t = setInterval(() => setNow(Date.now()), 250);
+      const t = setInterval(() => setNow(Date.now()), 1000);
       return () => clearInterval(t);
     }
   }, [phase]);
@@ -148,15 +192,21 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
   const updSet = (ei, si, patch) => setLog((a) => a.map((b, x) => (x !== ei ? b : { ...b, sets: b.sets.map((s, k) => (k !== si ? s : { ...s, ...patch })) })));
 
   const applyWeight = (ei, kg) => {
+    const disp = roundLoad(toU(kg, u), u);
+    const normalizedKg = fromU(disp, u);
     setLog((a) => a.map((b, x) => (x !== ei ? b : {
       ...b,
-      manualWeightKg: kg,
-      sets: b.sets.map((s) => (s.done ? s : { ...s, w: kg > 0 ? String(toU(kg, u)) : '' })),
+      manualWeightKg: normalizedKg,
+      sets: b.sets.map((s) => (s.done ? s : {
+        ...s,
+        w: normalizedKg > 0 ? String(disp) : '',
+        confirmed: { ...(s.confirmed || {}), w: true },
+      })),
     })));
   };
 
   const openAdjust = () => {
-    const base = effectiveWeightKg != null && effectiveWeightKg > 0 ? toU(effectiveWeightKg, u) : stepW;
+    const base = effectiveWeightKg != null && effectiveWeightKg > 0 ? roundLoad(toU(effectiveWeightKg, u), u) : stepW;
     setAdjValue(base);
     setAdjOpen(true);
   };
@@ -198,12 +248,13 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
     if (!startedAt) return;
     const endedAt = Date.now();
     updSet(exIndex, setIndex, { endedAt, active: false });
-    // prepare register
     const sSet = cur.sets[setIndex];
-    const w = sSet.w;
-    const r = sSet.r;
-    setReg({ r: '', w: w || (effectiveWeightKg > 0 ? String(toU(effectiveWeightKg, u)) : ''), rir: null });
-    setRegTouched(false);
+    setReg({
+      r: sSet.r || String(rec.targetReps || cur.ex.reps || ''),
+      w: sSet.w || (effectiveWeightKg > 0 ? String(toU(effectiveWeightKg, u)) : ''),
+      rir: sSet.rir != null ? sSet.rir : targetRir(rec),
+    });
+    setRegConfirmed(sSet.confirmed ? { ...sSet.confirmed } : { r: false, w: false, rir: false });
     setPhase('register');
   };
 
@@ -214,10 +265,6 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
   };
 
   const saveRegister = () => {
-    if (!regTouched) {
-      Alert.alert('Confirma la serie', 'Pulsa + o - para confirmar reps, peso o RIR.');
-      return;
-    }
     const s = cur.sets[setIndex];
     const startedAtTs = s.startedAt || startedAt || Date.now();
     const endedAtTs = s.endedAt || Date.now();
@@ -226,24 +273,21 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
       Alert.alert('Falta reps', 'Anota cuántas repeticiones hiciste antes de guardar la serie.');
       return;
     }
-    const wDisp = String(reg.w).replace(',', '.');
-    const wKg = fromU(parseFloat(wDisp) || 0, u);
+    const wDisp = roundLoad(parseFloat(String(reg.w).replace(',', '.')) || 0, u);
     const rir = reg.rir === null || reg.rir === undefined || reg.rir === '' ? null : parseInt(reg.rir);
-    let rb = null;
-    if (setIndex !== 0) {
-      for (let i = setIndex - 1; i >= 0; i--) {
-        const pe = cur.sets[i];
-        if (pe && pe.endedAt) {
-          rb = Math.round((startedAtTs - pe.endedAt) / 1000);
-          break;
-        }
-      }
-      if (rb == null) rb = null;
-    }
+    const confirmed = {
+      r: !!regConfirmed.r,
+      w: !!regConfirmed.w || effectiveWeightKg === 0,
+      rir: !!regConfirmed.rir,
+    };
+    const unconfirmed = !(confirmed.r && confirmed.w && confirmed.rir);
+    const rb = lastRestSec(cur.sets, setIndex, startedAtTs);
     updSet(exIndex, setIndex, {
-      w: reg.w,
+      w: wDisp > 0 ? String(wDisp) : '',
       r: String(r),
       rir,
+      confirmed,
+      unconfirmed,
       failure: rir === 0,
       startedAt: startedAtTs,
       endedAt: endedAtTs,
@@ -251,7 +295,6 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
       done: true,
       active: false,
     });
-    // update reg weight into set already via w
     const nextSet = setIndex + 1;
     if (nextSet < totalSets) {
       setSetIndex(nextSet);
@@ -284,16 +327,23 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
       targetSets: b.ex.sets,
       targetRestSec: b.rec.restSec,
       recWeightKg: b.manualWeightKg != null ? b.manualWeightKg : b.rec.weightKg,
-      sets: b.sets.filter((s) => s.done && parseInt(s.r) > 0).map((s) => ({
-        w: fromU(parseFloat(String(s.w).replace(',', '.')) || 0, u),
-        r: parseInt(s.r),
-        rir: s.rir,
-        failure: s.rir === 0,
-        startedAt: s.startedAt,
-        endedAt: s.endedAt,
-        restBeforeSec: s.restBeforeSec,
-        pr: false,
-      })),
+      sets: b.sets.filter((s) => s.done && parseInt(s.r) > 0).map((s) => {
+        const confirmed = s.confirmed || { r: true, w: true, rir: true };
+        const unconfirmed = s.unconfirmed != null ? !!s.unconfirmed : !(confirmed.r && confirmed.w && confirmed.rir);
+        const wDisp = roundLoad(parseFloat(String(s.w).replace(',', '.')) || 0, u);
+        return {
+          w: fromU(wDisp, u),
+          r: parseInt(s.r),
+          rir: s.rir,
+          failure: s.rir === 0,
+          startedAt: s.startedAt,
+          endedAt: s.endedAt,
+          restBeforeSec: s.restBeforeSec,
+          confirmed,
+          unconfirmed,
+          pr: false,
+        };
+      }),
     })).filter((e) => e.sets.length);
     if (!exercises.length) {
       Alert.alert('Sin series', 'Marca al menos una serie como hecha.');
@@ -344,9 +394,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
     } catch (e) {}
   }, [log, exIndex, setIndex, phase, restTarget, restStarted, touched]);
 
-  const remainingRest = restStarted ? restTarget - Math.floor((now - restStarted) / 1000) : restTarget;
   const elapsedRest = restStarted ? Math.floor((now - restStarted) / 1000) : 0;
-  const restOver = elapsedRest > restTarget;
   const restThreshold = Math.max(20, Math.round(restTarget * 0.2));
   const restAlert = restStarted && (elapsedRest - restTarget) > restThreshold;
 
@@ -361,10 +409,6 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
   }) : null;
 
   const bodyKg = Number(data.profile && data.profile.weightKg) || 0;
-  const dbEx = null;
-  // find met from exercises module
-  // lazy import not; use require? We'll import at top. Add import exerciseById.
-  // (handled below)
 
   const renderHeader = (title, subtitle, segments) => (
     <View style={{ backgroundColor: C.card, borderRadius: 18, paddingVertical: 12, paddingHorizontal: 16, borderWidth: 1, borderColor: C.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -379,26 +423,6 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
       </View>
     </View>
   );
-
-const Ring = ({ progress, center, C }) => (
-    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={290} height={290}>
-        <Defs>
-          <SvgGrad id="ringGrad" x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor={C.gradRing0} />
-            <Stop offset="1" stopColor={C.gradRing1} />
-          </SvgGrad>
-        </Defs>
-        <Circle cx={145} cy={145} r={128} stroke={C.ringTrack} strokeWidth={14} fill="none" />
-        <Circle cx={145} cy={145} r={128} stroke="url(#ringGrad)" strokeWidth={14} fill="none" strokeLinecap="round"
-          strokeDasharray={`${Math.max(0, Math.min(1, progress)) * 804} 804`} transform="rotate(-90 145 145)" />
-      </Svg>
-      <View style={{ position: 'absolute', alignItems: 'center', justifyContent: 'center' }}>
-        {center}
-      </View>
-    </View>
-  );
-
 
   const commonPad = { paddingTop: ins.top + 10, paddingHorizontal: 22, paddingBottom: Math.max(ins.bottom, 0) + 28 };
 
@@ -416,7 +440,7 @@ const Ring = ({ progress, center, C }) => (
   }
 
   if (phase === 'recommend') {
-    const noHist = !rec.weightKg && rec.weightKg !== 0; // null
+    const noHist = !rec.weightKg && rec.weightKg !== 0;
     const bodyweight = rec.weightKg === 0;
     const rirTarget = Array.isArray(rec.rir) ? (rec.rir[1] ?? rec.rir[0] ?? 2) : 2;
     const rirStart = (4 - rirTarget) * 19.5;
@@ -438,11 +462,11 @@ const Ring = ({ progress, center, C }) => (
                 {noHist ? (
                   <View style={{ marginTop: 8 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Press onPress={() => setNoHistWeight((v) => Math.max(0, Math.round((v - stepW) * 10) / 10))} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
+                      <Press onPress={() => setNoHistWeight((v) => subLoadStep(v, u))} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
                         <Ionicons name="remove" size={22} color={C.text} />
                       </Press>
                       <T style={{ fontSize: 38, fontWeight: '700', letterSpacing: -1.1, fontVariant: ['tabular-nums'], flex: 1, textAlign: 'center' }}>{noHistWeight.toString().replace('.', ',')}</T>
-                      <Press onPress={() => setNoHistWeight((v) => Math.round((v + stepW) * 10) / 10)} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
+                      <Press onPress={() => setNoHistWeight((v) => addLoadStep(v, u))} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
                         <Ionicons name="add" size={22} color={C.text} />
                       </Press>
                     </View>
@@ -495,6 +519,7 @@ const Ring = ({ progress, center, C }) => (
                 label={noHist ? 'Empezar con este peso' : (bodyweight ? 'Empezar' : `Usar ${toU(effectiveWeightKg, u)} ${u}`)}
                 onPress={() => {
                   if (noHist) applyWeight(exIndex, fromU(noHistWeight, u));
+                  else if (!bodyweight && effectiveWeightKg != null && effectiveWeightKg > 0) applyWeight(exIndex, effectiveWeightKg);
                   setPhase('start');
                 }}
               />
@@ -521,7 +546,7 @@ const Ring = ({ progress, center, C }) => (
                 <Coach mood="neutral" size="sm" />
               </View>
               <View style={{ alignItems: 'center', marginVertical: 8 }}>
-                <Ring C={C} progress={0} center={
+                <Ring progress={0} center={
                   <LinearGradient colors={[C.gradPlay0, C.gradPlay1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ width: 112, height: 112, borderRadius: 56, alignItems: 'center', justifyContent: 'center' }}>
                     <Press onPress={() => startRunning(setIndex)} style={{ width: 112, height: 112, borderRadius: 56, alignItems: 'center', justifyContent: 'center' }}>
                       <Ionicons name="play" size={46} color={C.playTriangle} />
@@ -558,7 +583,7 @@ const Ring = ({ progress, center, C }) => (
                 <Coach mood="neutral" size="sm" />
               </View>
               <View style={{ alignItems: 'center', marginVertical: 8 }}>
-                <Ring C={C} progress={progress} center={
+                <Ring progress={progress} center={
                   <View style={{ alignItems: 'center' }}>
                     <T style={{ fontSize: 14, color: C.mute }}>Tiempo habitual 25 a 45 s</T>
                     <T style={{ fontSize: 64, fontWeight: '700', letterSpacing: -1.9, fontVariant: ['tabular-nums'], marginTop: 4 }}>{mm(secs)}</T>
@@ -599,59 +624,57 @@ const Ring = ({ progress, center, C }) => (
                   <T style={{ fontSize: 14, lineHeight: 20 }}>{bubble}</T>
                 </View>
               </View>
-              {/* Reps stepper */}
+              <T style={{ fontSize: 12, color: C.mute }}>Los valores atenuados son sugerencias. Toca + o − para confirmarlos.</T>
               <View style={{ backgroundColor: C.card, borderRadius: 26, paddingVertical: 12, paddingHorizontal: 18, borderWidth: 1, borderColor: C.line }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                   <View>
                     <T style={{ fontSize: 13, color: C.mute }}>Reps</T>
                     <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 2 }}>
-                      <T style={{ fontSize: 38, fontWeight: '700', letterSpacing: -1.1, fontVariant: ['tabular-nums'] }}>{reg.r === '' ? '-' : reg.r}</T>
+                      <T style={{ fontSize: 38, fontWeight: '700', letterSpacing: -1.1, fontVariant: ['tabular-nums'], opacity: regConfirmed.r ? 1 : 0.4 }}>{reg.r === '' ? '-' : reg.r}</T>
                     </View>
                   </View>
                   <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <Press onPress={() => { setRegTouched(true); setReg((p) => ({ ...p, r: String(Math.max(0, (parseInt(p.r) || 0) - 1)) })); }} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
+                    <Press onPress={() => { setRegConfirmed((c) => ({ ...c, r: true })); setReg((p) => ({ ...p, r: String(Math.max(0, (parseInt(p.r) || 0) - 1)) })); }} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
                       <Ionicons name="remove" size={22} color={C.text} />
                     </Press>
-                    <Press onPress={() => { setRegTouched(true); setReg((p) => ({ ...p, r: String((parseInt(p.r) || 0) + 1) })); }} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
+                    <Press onPress={() => { setRegConfirmed((c) => ({ ...c, r: true })); setReg((p) => ({ ...p, r: String((parseInt(p.r) || 0) + 1) })); }} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
                       <Ionicons name="add" size={22} color={C.text} />
                     </Press>
                   </View>
                 </View>
               </View>
-              {/* Weight stepper */}
               <View style={{ backgroundColor: C.card, borderRadius: 26, paddingVertical: 12, paddingHorizontal: 18, borderWidth: 1, borderColor: C.line }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                   <View>
                     <T style={{ fontSize: 13, color: C.mute }}>Peso</T>
                     <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 2 }}>
-                      <T style={{ fontSize: 38, fontWeight: '700', letterSpacing: -1.1, fontVariant: ['tabular-nums'] }}>{reg.w.toString().replace('.', ',')}</T>
+                      <T style={{ fontSize: 38, fontWeight: '700', letterSpacing: -1.1, fontVariant: ['tabular-nums'], opacity: regConfirmed.w ? 1 : 0.4 }}>{reg.w.toString().replace('.', ',')}</T>
                       <T style={{ fontSize: 16, color: C.mute, fontWeight: '500' }}>{u}</T>
                     </View>
                   </View>
                   <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <Press onPress={() => { setRegTouched(true); setReg((p) => ({ ...p, w: String(Math.max(0, Math.round(((parseFloat(String(p.w).replace(',', '.')) || 0) - stepW) * 10) / 10)) })); }} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
+                    <Press onPress={() => { setRegConfirmed((c) => ({ ...c, w: true })); setReg((p) => ({ ...p, w: String(subLoadStep(parseFloat(String(p.w).replace(',', '.')) || 0, u)) })); }} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
                       <Ionicons name="remove" size={22} color={C.text} />
                     </Press>
-                    <Press onPress={() => { setRegTouched(true); setReg((p) => ({ ...p, w: String(Math.round(((parseFloat(String(p.w).replace(',', '.')) || 0) + stepW) * 10) / 10) })); }} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
+                    <Press onPress={() => { setRegConfirmed((c) => ({ ...c, w: true })); setReg((p) => ({ ...p, w: String(addLoadStep(parseFloat(String(p.w).replace(',', '.')) || 0, u)) })); }} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
                       <Ionicons name="add" size={22} color={C.text} />
                     </Press>
                   </View>
                 </View>
               </View>
-              {/* RIR stepper */}
               <View style={{ backgroundColor: C.card, borderRadius: 26, paddingVertical: 12, paddingHorizontal: 18, borderWidth: 1, borderColor: C.line }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                   <View>
                     <T style={{ fontSize: 13, color: C.mute }}>RIR</T>
                     <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 2 }}>
-                      <T style={{ fontSize: 38, fontWeight: '700', letterSpacing: -1.1, fontVariant: ['tabular-nums'] }}>{rir === null ? '—' : rir}</T>
+                      <T style={{ fontSize: 38, fontWeight: '700', letterSpacing: -1.1, fontVariant: ['tabular-nums'], opacity: regConfirmed.rir ? 1 : 0.4 }}>{rir === null ? '—' : rir}</T>
                     </View>
                   </View>
                   <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <Press onPress={() => { setRegTouched(true); setReg((p) => ({ ...p, rir: p.rir === null ? 0 : Math.max(0, p.rir - 1) })); }} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
+                    <Press onPress={() => { setRegConfirmed((c) => ({ ...c, rir: true })); setReg((p) => ({ ...p, rir: p.rir === null ? 0 : Math.max(0, p.rir - 1) })); }} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
                       <Ionicons name="remove" size={22} color={C.text} />
                     </Press>
-                    <Press onPress={() => { setRegTouched(true); setReg((p) => ({ ...p, rir: p.rir === null ? 1 : Math.min(5, p.rir + 1) })); }} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
+                    <Press onPress={() => { setRegConfirmed((c) => ({ ...c, rir: true })); setReg((p) => ({ ...p, rir: p.rir === null ? 1 : Math.min(5, p.rir + 1) })); }} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
                       <Ionicons name="add" size={22} color={C.text} />
                     </Press>
                   </View>
@@ -694,7 +717,7 @@ const Ring = ({ progress, center, C }) => (
                 </View>
               </View>
               <View style={{ alignItems: 'center', marginVertical: 8 }}>
-                <Ring C={C} progress={progress} center={
+                <Ring progress={progress} center={
                   <View style={{ alignItems: 'center' }}>
                     <T style={{ fontSize: 14, color: C.mute }}>Descansando</T>
                     <T style={{ fontSize: 64, fontWeight: '700', letterSpacing: -1.9, fontVariant: ['tabular-nums'], marginTop: 4 }}>{mm(elapsedRest)}</T>
@@ -721,7 +744,6 @@ const Ring = ({ progress, center, C }) => (
     const mood = sc && sc.score >= 75 ? 'happy' : 'neutral';
     const kcalLine = (() => {
       if (!bodyKg) return 'Agrega tu peso en el perfil para ver kcal.';
-      // find met: import exerciseById
       const db = exerciseById(cur.ex.id);
       const met = db ? db.met : 3.5;
       const first = cur.sets.find((s) => s.startedAt);
@@ -768,8 +790,8 @@ const Ring = ({ progress, center, C }) => (
                 {cur.sets.filter((s) => s.done).map((s, i) => (
                   <View key={i} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 7, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: C.line }}>
                     <T style={{ fontSize: 13, color: C.mute, width: 60 }}>Serie {i + 1}</T>
-                    <T style={{ fontSize: 14, fontWeight: '700', flex: 1, fontVariant: ['tabular-nums'] }}>{toU(parseFloat(String(s.w).replace(',', '.')) || 0, u)} × {s.r}</T>
-                    <T style={{ fontSize: 13, color: C.mute, width: 50, textAlign: 'right' }}>RIR {s.rir === null ? '—' : s.rir}</T>
+                    <T style={{ fontSize: 14, fontWeight: '700', flex: 1, fontVariant: ['tabular-nums'], opacity: s.unconfirmed ? 0.5 : 1 }}>{toU(parseFloat(String(s.w).replace(',', '.')) || 0, u)} × {s.r}</T>
+                    <T style={{ fontSize: 13, color: C.mute, width: 100, textAlign: 'right' }}>{s.unconfirmed ? 'sin confirmar' : `RIR ${s.rir === null ? '—' : s.rir}`}</T>
                   </View>
                 ))}
               </Card>
@@ -792,11 +814,11 @@ const Ring = ({ progress, center, C }) => (
         <View style={{ backgroundColor: C.bg, borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 18, paddingBottom: Math.max(ins.bottom, 16) }}>
           <T style={{ fontSize: 20, fontWeight: '700', marginBottom: 12 }}>Ajustar peso</T>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-            <Press onPress={() => setAdjValue((v) => Math.max(0, Math.round((v - stepW) * 10) / 10))} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
+            <Press onPress={() => setAdjValue((v) => subLoadStep(v, u))} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
               <Ionicons name="remove" size={22} color={C.text} />
             </Press>
             <T style={{ flex: 1, textAlign: 'center', fontSize: 38, fontWeight: '700', fontVariant: ['tabular-nums'] }}>{adjValue.toString().replace('.', ',')}</T>
-            <Press onPress={() => setAdjValue((v) => Math.round((v + stepW) * 10) / 10)} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
+            <Press onPress={() => setAdjValue((v) => addLoadStep(v, u))} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
               <Ionicons name="add" size={22} color={C.text} />
             </Press>
           </View>
