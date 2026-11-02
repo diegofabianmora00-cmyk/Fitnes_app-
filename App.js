@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert, BackHandler, Dimensions, ScrollView, View } from 'react-native';
+import { Alert, Animated, BackHandler, Dimensions, ScrollView, Vibration, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -33,6 +33,53 @@ const TABS = [
   ['settings', 'Ajustes', 'settings', Settings],
 ];
 
+function AnimatedTabIcon({ name, active, id }) {
+  const bounce = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (active) {
+      bounce.setValue(0);
+      Animated.spring(bounce, {
+        toValue: 1,
+        speed: 35,
+        bounciness: 10,
+        useNativeDriver: true,
+      }).start(() => {
+        Animated.spring(bounce, {
+          toValue: 0,
+          speed: 60,
+          bounciness: 4,
+          useNativeDriver: true,
+        }).start();
+      });
+    }
+  }, [active]);
+
+  let transform = [];
+  if (id === 'home') {
+    const scale = bounce.interpolate({ inputRange: [0, 1], outputRange: [1, 1.25] });
+    const translateY = bounce.interpolate({ inputRange: [0, 1], outputRange: [0, -4] });
+    transform = [{ scale }, { translateY }];
+  } else if (id === 'routines') {
+    const rotate = bounce.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-22deg'] });
+    const scale = bounce.interpolate({ inputRange: [0, 1], outputRange: [1, 1.2] });
+    transform = [{ scale }, { rotate }];
+  } else if (id === 'progress') {
+    const scale = bounce.interpolate({ inputRange: [0, 1], outputRange: [1, 1.3] });
+    transform = [{ scale }];
+  } else if (id === 'settings') {
+    const rotate = bounce.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '90deg'] });
+    const scale = bounce.interpolate({ inputRange: [0, 1], outputRange: [1, 1.2] });
+    transform = [{ scale }, { rotate }];
+  }
+
+  return (
+    <Animated.View style={{ transform }}>
+      <Ionicons name={active ? name : `${name}-outline`} size={24} color={active ? C.accent : C.mute} />
+    </Animated.View>
+  );
+}
+
 function Shell() {
   const { ready, data } = useStore();
   const ins = useSafeAreaInsets();
@@ -42,6 +89,7 @@ function Shell() {
   const [draft, setDraft] = useState(null);
   const workoutBackRef = useRef(null);
   const scrollRef = useRef(null);
+  const edgeVibrationRef = useRef({ left: false, right: false });
   const W = Dimensions.get('window').width;
 
   useEffect(() => {
@@ -98,10 +146,41 @@ function Shell() {
           pagingEnabled
           showsHorizontalScrollIndicator={false}
           scrollEventThrottle={16}
+          decelerationRate="fast"
+          onScroll={(e) => {
+            const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+            const x = contentOffset.x;
+            const max = contentSize.width - layoutMeasurement.width;
+            if (x <= 0) {
+              if (!edgeVibrationRef.current.left) {
+                Vibration.vibrate(10);
+                edgeVibrationRef.current.left = true;
+              }
+            } else {
+              edgeVibrationRef.current.left = false;
+            }
+            if (x >= max - 5 && max > 0) {
+              if (!edgeVibrationRef.current.right) {
+                Vibration.vibrate(10);
+                edgeVibrationRef.current.right = true;
+              }
+            } else {
+              edgeVibrationRef.current.right = false;
+            }
+          }}
+          onScrollEndDrag={(e) => {
+            const offsetX = e.nativeEvent.contentOffset.x;
+            const idx = Math.round(offsetX / W);
+            if (TABS[idx] && TABS[idx][0] !== tab) {
+              Vibration.vibrate(12);
+              setTab(TABS[idx][0]);
+            }
+          }}
           onMomentumScrollEnd={(e) => {
             const offsetX = e.nativeEvent.contentOffset.x;
             const idx = Math.round(offsetX / W);
             if (TABS[idx] && TABS[idx][0] !== tab) {
+              Vibration.vibrate(12);
               setTab(TABS[idx][0]);
             }
           }}
@@ -118,9 +197,16 @@ function Shell() {
           {TABS.map(([id, label, icon]) => {
             const on = id === tab;
             return (
-              <Press key={id} onPress={() => setTab(id)} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 48, paddingVertical: 4 }} hitSlop={8}>
-                <Ionicons name={on ? icon : `${icon}-outline`} size={24} color={on ? C.accent : C.mute} />
-                <T style={{ fontSize: 11, marginTop: 3, color: on ? C.accent : C.mute }}>{label}</T>
+              <Press key={id} onPress={() => {
+                Vibration.vibrate(12);
+                setTab(id);
+                const idx = TABS.findIndex((t) => t[0] === id);
+                if (idx !== -1 && scrollRef.current) {
+                  scrollRef.current.scrollTo({ x: idx * W, animated: false });
+                }
+              }} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 48, paddingVertical: 4 }} hitSlop={8}>
+                <AnimatedTabIcon name={icon} active={on} id={id} />
+                <T style={{ fontSize: 11, marginTop: 3, color: on ? C.accent : C.mute, fontWeight: on ? '700' : '400' }}>{label}</T>
               </Press>
             );
           })}

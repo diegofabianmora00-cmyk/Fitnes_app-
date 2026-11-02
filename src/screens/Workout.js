@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, ScrollView, View } from 'react-native';
+import { Alert, Animated, ScrollView, Vibration, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -344,6 +344,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
   };
 
   const saveRegister = () => {
+    Vibration.vibrate(30);
     const s = cur.sets[setIndex];
     const startedAtTs = s.startedAt || startedAt || Date.now();
     const endedAtTs = s.endedAt || Date.now();
@@ -394,6 +395,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
 
   const finishSession = (opts = {}) => {
     if (saved) return;
+    Vibration.vibrate([0, 60, 80, 60]);
     if (!opts.allowActive && log.some((b) => b.sets.some((s) => s.active))) {
       Alert.alert('Serie en curso', 'Termina o cancela la serie antes de guardar.');
       return;

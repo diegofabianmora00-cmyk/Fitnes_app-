@@ -4,7 +4,7 @@ import { C } from './theme';
 
 export function Press({ onPress, onLongPress, style, children, disabled, hitSlop }) {
   const s = useRef(new Animated.Value(1)).current;
-  const to = (v) => Animated.spring(s, { toValue: v, speed: 40, bounciness: 6, useNativeDriver: true }).start();
+  const to = (v) => Animated.spring(s, { toValue: v, speed: 50, bounciness: 4, useNativeDriver: true }).start();
   const flattenedStyle = Array.isArray(style) ? Object.assign({}, ...style) : (style || {});
   const layoutKeys = [
     'flex', 'flexGrow', 'flexShrink', 'flexBasis',
@@ -24,7 +24,7 @@ export function Press({ onPress, onLongPress, style, children, disabled, hitSlop
   return (
     <Pressable disabled={disabled} onPress={onPress} onLongPress={onLongPress} hitSlop={hitSlop}
       style={layoutStyle}
-      onPressIn={() => to(0.96)} onPressOut={() => to(1)}>
+      onPressIn={() => to(0.98)} onPressOut={() => to(1)}>
       <Animated.View style={[innerStyle, { transform: [{ scale: s }] }]}>{children}</Animated.View>
     </Pressable>
   );

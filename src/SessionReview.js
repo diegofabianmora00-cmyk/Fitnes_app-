@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Dimensions, Modal, ScrollView, TextInput, View } from 'react-native';
+import { Animated, Dimensions, Modal, ScrollView, TextInput, Vibration, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { C } from './theme';
@@ -95,6 +95,7 @@ export default function SessionReview({ visible, review, records = [], workout =
 
   useEffect(() => {
     if (visible) {
+      Vibration.vibrate([0, 60, 80, 60]);
       setStep(records.length ? 0 : 1);
       setShowScore(false);
       setShowRest(false);

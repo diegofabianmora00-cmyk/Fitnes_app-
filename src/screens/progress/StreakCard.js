@@ -1,5 +1,5 @@
-import React from 'react';
-import { View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C } from '../../theme';
 import { Card, T } from '../../ui';
@@ -9,6 +9,16 @@ export default function StreakCard({ data }) {
   const info = streakInfo(data);
   const current = info.current;
   const best = info.best;
+
+  const anim = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, { toValue: 1.15, duration: 750, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 1, duration: 750, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
 
   return (
     <Card style={{ padding: 18, marginTop: 12 }}>
@@ -20,9 +30,9 @@ export default function StreakCard({ data }) {
             <T style={{ fontSize: 16, color: C.softText, fontWeight: '600' }}>días</T>
           </View>
         </View>
-        <View style={{ width: 52, height: 52, borderRadius: 16, backgroundColor: C.accentDim, alignItems: 'center', justifyContent: 'center' }}>
-          <Ionicons name="flame-outline" size={28} color={C.accent} />
-        </View>
+        <Animated.View style={{ width: 52, height: 52, borderRadius: 16, backgroundColor: C.accentDim, alignItems: 'center', justifyContent: 'center', transform: [{ scale: anim }] }}>
+          <Ionicons name="flame" size={28} color={C.accent} />
+        </Animated.View>
       </View>
 
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, gap: 6 }}>
