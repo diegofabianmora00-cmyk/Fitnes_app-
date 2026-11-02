@@ -15,6 +15,7 @@ import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { exerciseById, registerCustomExercises } from './exercises';
 import { rescoreWorkouts } from './recommend';
+import { setThemeMode } from './theme';
 
 export const uid = () => Math.random().toString(36).slice(2, 9);
 export const KG = 2.20462;
@@ -52,6 +53,7 @@ const LEGACY = { e1: 'press-banca', e2: 'press-militar', e3: 'fondos' };
 export const seed = {
   schemaVersion: 4,
   unit: 'kg',
+  themeMode: 'dark',
   profile: { ...PROFILE_DEFAULT },
   coachMemory: [],
   customExercises: [],
@@ -124,6 +126,7 @@ export const migrate = (raw) => {
   const base = {
     ...seed,
     ...raw,
+    themeMode: raw.themeMode || 'dark',
     profile: {
       ...PROFILE_DEFAULT,
       tone: raw.profile?.tone || 'tranquilo',
@@ -166,6 +169,9 @@ export function StoreProvider({ children }) {
   const ref = useRef(seed);
   const [data, setData] = useState(seed);
   const [ready, setReady] = useState(false);
+  useEffect(() => {
+    setThemeMode(data.themeMode || 'dark');
+  }, [data.themeMode]);
   useEffect(() => {
     registerCustomExercises(data.customExercises);
   }, [data.customExercises]);

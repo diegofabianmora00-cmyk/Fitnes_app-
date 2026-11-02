@@ -1,14 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, View } from 'react-native';
-
-export const COACH = {
-  name: 'Atlas',
-  body: '#171C22',
-  edge: '#2C343F',
-  screen: '#0E1216',
-  glow: '#7CF2C4',
-  eye: '#7CF2C4',
-};
+import { COACH } from './theme';
+export { COACH };
 
 const SIZES = {
   lg: {

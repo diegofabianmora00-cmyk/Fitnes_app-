@@ -22,13 +22,30 @@ const clockMin = (sec) => `${Math.floor((sec || 0) / 60)} min`;
 export default function HistoryList({ data }) {
   const workouts = data.workouts || [];
   const [filter, setFilter] = useState('Todas');
+  const [selectedMonth, setSelectedMonth] = useState('Todos');
   const [limit, setLimit] = useState(10);
   const [selectedWorkout, setSelectedWorkout] = useState(null);
   const [focusComment, setFocusComment] = useState(false);
 
+  const monthMap = {};
+  workouts.forEach((w) => {
+    if (!w.date) return;
+    const d = new Date(w.date);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = d.toLocaleDateString('es-DO', { month: 'long', year: 'numeric' });
+    monthMap[key] = label.charAt(0).toUpperCase() + label.slice(1);
+  });
+  const months = Object.entries(monthMap).sort().reverse();
+
   const filtered = workouts.filter((w) => {
-    if (filter === 'Con comentario') return !!w.comment;
-    if (filter === 'Con récord') return !!(w.prs && w.prs.length > 0);
+    if (filter === 'Con comentario' && !w.comment) return false;
+    if (filter === 'Con récord' && !(w.prs && w.prs.length > 0)) return false;
+    if (selectedMonth !== 'Todos') {
+      if (!w.date) return false;
+      const d = new Date(w.date);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (key !== selectedMonth) return false;
+    }
     return true;
   });
 
@@ -59,9 +76,9 @@ export default function HistoryList({ data }) {
               key={f}
               onPress={() => setFilter(f)}
               style={{
-                height: 44,
-                paddingHorizontal: 16,
-                borderRadius: 16,
+                height: 40,
+                paddingHorizontal: 14,
+                borderRadius: 14,
                 backgroundColor: on ? C.accentDim : C.card2,
                 borderWidth: 1,
                 borderColor: on ? C.accent : C.line,
@@ -69,11 +86,44 @@ export default function HistoryList({ data }) {
                 justifyContent: 'center',
               }}
             >
-              <T style={{ fontSize: 14, fontWeight: '600', color: on ? C.accent : C.muteText }}>{f}</T>
+              <T style={{ fontSize: 13, fontWeight: '600', color: on ? C.accent : C.muteText }}>{f}</T>
             </Press>
           );
         })}
       </ScrollView>
+
+      {months.length > 0 && (
+        <ScrollView
+          horizontal
+          nestedScrollEnabled={true}
+          directionalLockEnabled={true}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 8, marginBottom: 14 }}
+          onTouchStart={(e) => e.stopPropagation()}
+        >
+          {[{ id: 'Todos', label: 'Todos los meses' }, ...months.map(([id, label]) => ({ id, label }))].map((m) => {
+            const on = selectedMonth === m.id;
+            return (
+              <Press
+                key={m.id}
+                onPress={() => setSelectedMonth(m.id)}
+                style={{
+                  height: 38,
+                  paddingHorizontal: 12,
+                  borderRadius: 12,
+                  backgroundColor: on ? C.accent : C.card2,
+                  borderWidth: 1,
+                  borderColor: on ? C.accent : C.line,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <T style={{ fontSize: 12, fontWeight: '600', color: on ? C.accentText : C.muteText }}>{m.label}</T>
+              </Press>
+            );
+          })}
+        </ScrollView>
+      )}
 
       {visibleWorkouts.length === 0 ? (
         <Card style={{ padding: 24, alignItems: 'center' }}>

@@ -109,6 +109,6 @@ workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName, 
 
 ## Estado
 - Hecho: app base, base de ejercicios (79), perfil, motor de recomendación, entrenamiento
-  guiado, calorías, gráficas básicas, pruebas del motor y puntaje (49), rediseño completo de la pestaña Rutinas (+buscador, ejercicios personalizados en data.customExercises), rediseño completo de la pestaña Progreso, rediseño completo de la pestaña Inicio (estado día de descanso, chequeo de energía, tarjeta de mañana, récord cercano y resumen rápido), y puntaje de sesión v4 (guía de adherencia, ajuste intencional por cansancio/dolor/tiempo, pesos adaptativos por nivel, tolerancia al descanso asimétrica, racha protegida por autocuidado, promedio móvil 4 semanas y recálculo automático del historial).
-- Por confirmar: fallo 10 (fuente Inter en H y Btn de src/ui.js); no consta como hecho.
-- Pendiente: mejoras (Ajustes, salud y lesiones, configuración y accesibilidad, almacenamiento por mes).
+  guiado, calorías, gráficas básicas, pruebas del motor y puntaje (54), rediseño completo de la pestaña Rutinas (+buscador, ejercicios personalizados en data.customExercises), rediseño completo de la pestaña Progreso (con filtros e historial agrupado por mes), rediseño completo de la pestaña Inicio, puntaje de sesión v4, y rediseño completo de la pestaña Ajustes (modo oscuro y claro, salud y enfoque articular, gestión de ejercicios personalizados, importación y exportación de respaldos JSON, estilo de descanso y herramientas funcionales).
+- Por confirmar: ninguno (tipografía Inter en H y Btn confirmada y cargada correctamente con expo-google-fonts).
+- Pendiente: ninguno (prototipo completo y pulido).

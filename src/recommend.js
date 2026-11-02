@@ -534,6 +534,12 @@ export function recommendFor(data = {}, ex = {}) {
         out.primaryRule = RULES.lowConfidence;
       }
     }
+    if (profile.jointFocus && profile.jointFocus !== 'ninguna') {
+      const jfObj = JOINT_FOCUSES.find((j) => j.id === profile.jointFocus);
+      if (jfObj && (!out.text || !out.text.includes(jfObj.label))) {
+        out.text = `${out.text} [Salud articular: ${jfObj.label} — ${jfObj.desc}]`;
+      }
+    }
     return out;
   };
 
