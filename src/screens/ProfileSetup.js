@@ -7,12 +7,13 @@ import { Btn, Card, FadeIn, Field, H, Press, T } from '../ui';
 import { fromU, toU, useStore } from '../store';
 import {
   AMBITIONS, GOALS, LEVELS, REST_STYLES, SEXES,
+  ENVIRONMENTS, ACTIVITY_LEVELS, JOINT_FOCUSES,
   frequencyAdvice, labelOf, repRangeFor, restFor,
 } from '../recommend';
 import { COACH_TONES } from '../coachMemory';
 
 const mm = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-const TOTAL = 8;
+const TOTAL = 10;
 
 function Option({ selected, onPress, icon, title, desc }) {
   return (
@@ -78,6 +79,7 @@ export default function ProfileSetup({ mode = 'setup', onDone }) {
     const p = data.profile || {};
     return {
       goal: p.goal || 'hipertrofia',
+      environment: p.environment || 'gimnasio',
       ambition: p.ambition || 'progresar',
       level: p.level || 'principiante',
       daysPerWeek: p.daysPerWeek || 3,
@@ -85,6 +87,8 @@ export default function ProfileSetup({ mode = 'setup', onDone }) {
       height: p.heightCm ? String(p.heightCm) : '',
       age: p.age ? String(p.age) : '',
       sex: p.sex || 'hombre',
+      activityLevel: p.activityLevel || 'moderado',
+      jointFocus: p.jointFocus || 'ninguna',
       restStyle: p.restStyle || 'equilibrado',
       tone: p.tone || 'tranquilo',
     };
@@ -112,15 +116,16 @@ export default function ProfileSetup({ mode = 'setup', onDone }) {
   const restC = restFor(profileLike, 'compuesto');
   const restI = restFor(profileLike, 'aislamiento');
   const freq = frequencyAdvice(profileLike);
-  const canNext = step !== 4 || bodyOk;
+  const canNext = step !== 5 || bodyOk;
 
   const save = () => {
-    if (!bodyOk) { setStep(4); return; }
+    if (!bodyOk) { setStep(5); return; }
     update((d) => ({
       ...d,
       profile: {
         ...(d.profile || {}),
         goal: form.goal,
+        environment: form.environment,
         ambition: form.ambition,
         level: form.level,
         daysPerWeek: Number(form.daysPerWeek),
@@ -128,6 +133,8 @@ export default function ProfileSetup({ mode = 'setup', onDone }) {
         heightCm: Number(form.height),
         age: Number(form.age),
         sex: form.sex,
+        activityLevel: form.activityLevel,
+        jointFocus: form.jointFocus,
         restStyle: form.restStyle,
         tone: form.tone,
         completed: true,
@@ -137,16 +144,30 @@ export default function ProfileSetup({ mode = 'setup', onDone }) {
     if (onDone) onDone();
   };
 
-  const title = ['¿Cuál es tu objetivo?', '¿Cuánto quieres progresar?', 'Tu experiencia', '¿Cuántos días por semana?', 'Tus datos', 'Descanso entre series', 'Tono de Atlas', 'Todo listo'][step];
+  const title = [
+    '¿Cuál es tu objetivo?',
+    '¿Dónde entrenas?',
+    '¿Cuánto quieres progresar?',
+    'Tu experiencia con pesas',
+    '¿Cuántos días por semana?',
+    'Tus datos corporales',
+    'Nivel de actividad diaria',
+    'Cuidado articular y enfoque',
+    'Estilo de descanso entre series',
+    'Tono de Atlas y Resumen',
+  ][step];
+
   const subtitle = [
-    'Atlas ajustará el peso, las repeticiones y el descanso a lo que buscas.',
-    'Marca cuándo debe subirte el peso.',
-    'Así sabemos con qué cargas empezar y cuánto exigirte.',
-    'La constancia importa más que un plan perfecto.',
-    'Se usan para las recomendaciones y para estimar las calorías.',
+    'Atlas ajustará el peso, las repeticiones y el descanso según lo que buscas.',
+    'Personaliza las sugerencias de ejercicios según tu gimnasio o casa.',
+    'Define cuándo Atlas debe subirte el peso de trabajo.',
+    'Así sabemos con qué cargas empezar y cuánto exigirte desde el día uno.',
+    'La constancia y frecuencia óptima según la ciencia del ACSM.',
+    'Se usan para calcular tus recomendaciones y estimar calorías.',
+    'Ayuda a Atlas a calibrar tu recuperación y gasto energético.',
+    'Adapta las alertas de seguridad y prevención de lesiones.',
     'Tu preferencia ajusta el descanso sin salir de los rangos seguros.',
-    'Elige cómo te habla Atlas en cada notificación y consejo.',
-    'Revisa lo que Atlas usará. Puedes cambiarlo en Ajustes.',
+    'Elige cómo te habla Atlas y revisa la configuración completa que aplicará.',
   ][step];
 
   return (
@@ -182,13 +203,21 @@ export default function ProfileSetup({ mode = 'setup', onDone }) {
 
             {step === 1 && (
               <View>
+                {ENVIRONMENTS.map((e) => (
+                  <Option key={e.id} selected={form.environment === e.id} onPress={() => set('environment', e.id)} icon={e.icon} title={e.label} desc={e.desc} />
+                ))}
+              </View>
+            )}
+
+            {step === 2 && (
+              <View>
                 {AMBITIONS.map((a) => (
                   <Option key={a.id} selected={form.ambition === a.id} onPress={() => set('ambition', a.id)} icon={a.icon} title={a.label} desc={a.desc} />
                 ))}
               </View>
             )}
 
-            {step === 2 && (
+            {step === 3 && (
               <View>
                 {LEVELS.map((l) => (
                   <Option key={l.id} selected={form.level === l.id} onPress={() => set('level', l.id)} icon={l.icon} title={l.label} desc={l.desc} />
@@ -196,7 +225,7 @@ export default function ProfileSetup({ mode = 'setup', onDone }) {
               </View>
             )}
 
-            {step === 3 && (
+            {step === 4 && (
               <View>
                 <Chips options={[2, 3, 4, 5, 6]} value={form.daysPerWeek} onChange={(v) => set('daysPerWeek', v)} render={(v) => `${v} días`} />
                 <Card style={{ marginTop: 18 }}>
@@ -210,7 +239,7 @@ export default function ProfileSetup({ mode = 'setup', onDone }) {
               </View>
             )}
 
-            {step === 4 && (
+            {step === 5 && (
               <View>
                 <Card style={{ marginTop: 16 }}>
                   <T mute style={{ fontSize: 11, letterSpacing: 1 }}>PESO CORPORAL ({unit.toUpperCase()})</T>
@@ -232,13 +261,29 @@ export default function ProfileSetup({ mode = 'setup', onDone }) {
                     </View>
                   </View>
                 </Card>
-                <T mute style={{ fontSize: 13, marginTop: 18, marginBottom: 4 }}>Sexo</T>
+                <T mute style={{ fontSize: 13, marginTop: 18, marginBottom: 4 }}>Sexo biológico</T>
                 <Chips options={SEXES.map((s) => s.id)} value={form.sex} onChange={(v) => set('sex', v)} render={(id) => labelOf(SEXES, id)} />
                 {!!(bodyError && bodyTouched) && <T style={{ color: C.warn, fontSize: 13, marginTop: 12 }}>{bodyError}</T>}
               </View>
             )}
 
-            {step === 5 && (
+            {step === 6 && (
+              <View>
+                {ACTIVITY_LEVELS.map((al) => (
+                  <Option key={al.id} selected={form.activityLevel === al.id} onPress={() => set('activityLevel', al.id)} icon={al.icon} title={al.label} desc={al.desc} />
+                ))}
+              </View>
+            )}
+
+            {step === 7 && (
+              <View>
+                {JOINT_FOCUSES.map((jf) => (
+                  <Option key={jf.id} selected={form.jointFocus === jf.id} onPress={() => set('jointFocus', jf.id)} icon={jf.icon} title={jf.label} desc={jf.desc} />
+                ))}
+              </View>
+            )}
+
+            {step === 8 && (
               <View>
                 {REST_STYLES.map((r) => {
                   const c = restFor({ ...profileLike, restStyle: r.id }, 'compuesto');
@@ -257,8 +302,9 @@ export default function ProfileSetup({ mode = 'setup', onDone }) {
               </View>
             )}
 
-            {step === 6 && (
+            {step === 9 && (
               <View>
+                <T mute style={{ fontSize: 13, marginBottom: 10 }}>Elige el tono de voz de Atlas</T>
                 {COACH_TONES.map((t) => (
                   <Option
                     key={t.id}
@@ -269,25 +315,23 @@ export default function ProfileSetup({ mode = 'setup', onDone }) {
                     desc={t.desc}
                   />
                 ))}
-              </View>
-            )}
-
-            {step === 7 && (
-              <View>
-                <Card style={{ marginTop: 16 }}>
+                <Card style={{ marginTop: 22 }}>
+                  <T mute style={{ fontSize: 12, letterSpacing: 1, marginBottom: 4 }}>CONFIGURACIÓN APLICADA POR ATLAS</T>
                   <Row label="Objetivo" value={labelOf(GOALS, form.goal)} />
+                  <Row label="Entorno" value={labelOf(ENVIRONMENTS, form.environment)} />
                   <Row label="Progresión" value={labelOf(AMBITIONS, form.ambition)} />
                   <Row label="Nivel" value={labelOf(LEVELS, form.level)} />
-                  <Row label="Días por semana" value={`${form.daysPerWeek} días`} />
+                  <Row label="Días / semana" value={`${form.daysPerWeek} días`} />
                   <Row label="Peso corporal" value={`${form.weight} ${unit}`} />
-                  <Row label="Estatura" value={`${form.height} cm`} />
-                  <Row label="Edad" value={`${form.age} años`} />
+                  <Row label="Estatura / Edad" value={`${form.height} cm · ${form.age} años`} />
+                  <Row label="Actividad" value={labelOf(ACTIVITY_LEVELS, form.activityLevel)} />
+                  <Row label="Enfoque articular" value={labelOf(JOINT_FOCUSES, form.jointFocus)} />
                   <Row label="Descanso" value={labelOf(REST_STYLES, form.restStyle)} />
                   <Row label="Tono de Atlas" value={labelOf(COACH_TONES, form.tone) || form.tone} />
                 </Card>
                 <Card style={{ marginTop: 12 }}>
-                  <T mute style={{ fontSize: 12, letterSpacing: 1, marginBottom: 4 }}>PLAN QUE USARÁ ATLAS</T>
-                  <Row label="Repeticiones" value={`${range.min}-${range.max} por serie`} />
+                  <T mute style={{ fontSize: 12, letterSpacing: 1, marginBottom: 4 }}>PARÁMETROS DEL MOTOR</T>
+                  <Row label="Rango de repeticiones" value={`${range.min}-${range.max} por serie`} />
                   <Row label="Descanso compuesto" value={mm(restC)} />
                   <Row label="Descanso aislamiento" value={mm(restI)} />
                   <T mute style={{ fontSize: 11, marginTop: 12, lineHeight: 16 }}>

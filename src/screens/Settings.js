@@ -3,7 +3,7 @@ import { Alert, ScrollView, Share, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { C } from '../theme';
 import { Btn, Card, FadeIn, H, Press, T } from '../ui';
-import { KEYS, migrate, toU, useStore } from '../store';
+import { KEYS, migrate, seed, toU, useStore } from '../store';
 import { DEV_SEEDS } from '../devSeeds';
 import { GOALS, LEVELS, REST_STYLES, labelOf } from '../recommend';
 import { COACH_TONES } from '../coachMemory';
@@ -82,6 +82,35 @@ export default function Settings() {
         <Btn kind="ghost" label="Exportar datos" onPress={() => Share.share({ message: JSON.stringify(data, null, 2) })} style={{ marginTop: 14 }} />
         <Btn kind="ghost" label="Borrar todos los datos" onPress={reset} style={{ marginTop: 10 }} />
         {__DEV__ && <Btn kind="ghost" label="Simular datos dañados (solo desarrollo)" onPress={simulateCorrupt} style={{ marginTop: 10 }} />}
+        {__DEV__ && (
+          <Btn
+            kind="ghost"
+            label="⚡ Reiniciar app desde cero (Provisional dev)"
+            onPress={() => {
+              Alert.alert(
+                'Reiniciar desde cero',
+                'Se borrarán todos tus datos y perfil, iniciando la app como por primera vez.',
+                [
+                  { text: 'Cancelar', style: 'cancel' },
+                  {
+                    text: 'Reiniciar',
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        await AsyncStorage.clear();
+                        update(() => migrate(seed));
+                        Alert.alert('Reiniciado', 'La app se ha reiniciado desde cero.');
+                      } catch (e) {
+                        Alert.alert('Error', 'No se pudo reiniciar.');
+                      }
+                    }
+                  }
+                ]
+              );
+            }}
+            style={{ marginTop: 10, borderColor: C.warn }}
+          />
+        )}
       {__DEV__ && (
         <FadeIn delay={320}>
           <Card style={{ marginTop: 14 }}>

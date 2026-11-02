@@ -38,3 +38,13 @@ Este documento detalla las reglas, heurísticas y fórmulas científicas o de cr
   - **Cerca de un récord (`nearRecord`):** Detecta cuando el mejor peso confirmado en los últimos 14 días se encuentra entre el 90% y el 99.9% del récord personal de ese ejercicio (`personalRecords`), calculando la brecha (`gapKg`) y la relación (`ratio`). Se ignoran series sin confirmar (`unconfirmed: true`).
   - **Estimado de duración (`routineEstimate`):** Promedio redondeado de la duración en minutos de las últimas sesiones (hasta 3) de una rutina específica.
   - **Consejo de peso siguiente (`nextWeightHint`):** Prepara el mensaje contextual con el primer ejercicio de la próxima rutina basándose en `recommendFor`.
+
+## 8. Mejoras del Motor de Recomendaciones
+- **Bajar peso:** Si hay 2 sesiones seguidas por debajo del objetivo o se reporta fallo (RIR 0), se recomienda reducir la carga un 5-10% (criterio de la app, ACSM 2009).
+- **RIR que decide:** Un RIR muy alto (4-5) permite avanzar antes si se cumplió el objetivo; un RIR 0 (fallo) impide subir aunque se alcancen las repeticiones.
+- **Regreso tras pausa:** Tras 14 días o más sin entrenar un ejercicio, se sugiere retomar con una reducción del 10% (criterio de la app).
+- **Incrementos por ejercicio:** Incrementos más pequeños en aislamiento o mancuernas (1.25 kg / 2.5 lb) y estándar en compuestos pesados (2.5 kg / 5 lb), respetando kg/lb.
+- **Estancamiento con opciones concretas:** Opciones de cambiar rango, bajar un 5-10% para reconstruir, o revisar sueño y alimentación.
+- **Chequeo de energía:** Con energía baja registrada en el check-in diario (`checkin.level === 'cansado'`), se recomienda mantener el peso ese día.
+- **Series que mandan:** La última sesión y sus series confirmadas (excluyendo `unconfirmed: true`) son las que mandan para la recomendación.
+- **Fuentes y etiquetas:** Las heurísticas propias de la aplicación se etiquetan como "criterio de la app", diferenciándolas de la literatura científica (ACSM, Zourdos, Grgic, NSCA).

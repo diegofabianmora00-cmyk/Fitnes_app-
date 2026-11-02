@@ -45,6 +45,7 @@ no los crees ni los edites.
 - src/__tests__/scoring.test.js: pruebas del puntaje de sesión v3, recalculo y puntaje por rutina (jest).
 - src/__tests__/coachMemory.test.js: pruebas unitarias del cerebro de mensajes de Atlas (jest).
 - docs/decisiones.md: reglas del motor (progresión, estancamiento, descanso, PR, puntaje, e1RM y racha).
+- docs/sistema_recomendaciones.txt: explicación simple y exacta del sistema de recomendaciones.
 
 ## Datos (pesos siempre en kg)
 Claves de AsyncStorage:
@@ -56,8 +57,8 @@ Claves de AsyncStorage:
 - fitnesscoach:v1:draft: borrador del entreno en curso (rutina, inicio, series y posición);
   se borra al terminar o descartar.
 data = { schemaVersion: 4, unit, checkin: { date, level },
-profile: { goal, ambition, level, daysPerWeek, weightKg, heightCm, age, sex,
-  restStyle, tone, completed, updatedAt },
+profile: { goal, environment, ambition, level, daysPerWeek, weightKg, heightCm, age, sex,
+  activityLevel, jointFocus, restStyle, tone, completed, updatedAt },
 coachMemory: [string], // últimos 8 ids de mensajes mostrados por Atlas
 customExercises: [{ id, name, group, equipment, type, muscles, met, metCode, source, custom }], // ejercicios creados por el usuario; se mezclan con exercises de src/exercises.js
 routines: [{ id, name, goal, days: [0..6], defaults: { sets, reps, restSec }, exercises: [{ id, name, group, equipment, sets, reps, mode, rir, restSec }] }], // mode 'default' usa defaults de la rutina; 'manual' usa sets/reps/restSec/rir propios

@@ -1,0 +1,27 @@
+SISTEMA DE RECOMENDACIONES DE FITNESS COACH
+
+Este documento explica de manera simple y exacta cómo funciona el motor de recomendaciones de Fitness Coach (implementado en src/recommend.js).
+
+1. PERFIL Y OBJETIVOS INICIALES
+El motor toma en cuenta el perfil del usuario para personalizar cada recomendación:
+- Objetivo principal: Fuerza, Hipertrofia o Resistencia.
+- Ambición: Mantener, Progresar o Maximizar (determina qué tan rápido o estricto es el incremento de peso).
+- Nivel: Principiante, Intermedio o Avanzado.
+- Estilo de descanso: Corto, Equilibrado o Largo.
+
+2. PRIMERA VEZ (SIN HISTORIAL)
+- Si un ejercicio no tiene registros previos, Atlas no inventa un peso.
+- Se indica al usuario que elija un peso con el que pueda completar el rango de repeticiones objetivo dejando 2-3 repeticiones en reserva (RIR 2-3, basado en Zourdos et al., 2016).
+- A partir de esa primera sesión, el sistema comienza a aprender y recomendar.
+
+3. PROGRESIÓN (DOBLE PROGRESIÓN Y REGLA 2-FOR-2)
+- Se prioriza subir repeticiones antes que el peso (ACSM, 2009; NSCA).
+- Cuando el usuario cumple o supera el objetivo de repeticiones durante el número de sesiones requerido según su ambición, el sistema sugiere subir la carga en incrementos seguros (2.5 kg / 5 lb o el mínimo disponible según los discos/mancuernas).
+
+4. DETECCIÓN DE ESTANCAMIENTO
+- Se considera estancamiento si se llevan 3 sesiones consecutivas con el mismo peso sin lograr mejorar las repeticiones, o si pasan 14 días sin cumplir el objetivo.
+- En este caso, el motor recomienda mantener la carga y revisar la recuperación o el descanso en lugar de subir a ciegas, previniendo el sobreentrenamiento.
+
+5. DESCANSO Y ESFUERZO (RIR)
+- Los tiempos de descanso se adaptan al tipo de ejercicio (compuesto o de aislamiento) y al objetivo del usuario, respaldados por estudios científicos (como Grgic et al., 2017).
+- Se evalúa el esfuerzo real mediante el RIR (Repeticiones en Reserva) para calibrar la intensidad y calcular el puntaje de la sesión.

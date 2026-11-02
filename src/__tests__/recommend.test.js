@@ -43,6 +43,7 @@ const data = (workouts = [], profileOverrides = {}) => ({
   profile: { ...BASE_PROFILE, ...profileOverrides },
   routines: [],
   workouts,
+  now: workouts.length && workouts[0].date ? workouts[0].date : NOW,
 });
 
 const makeEx = ({
@@ -398,5 +399,67 @@ describe('funciones de inicio y descanso (nextRoutineDay, routineEstimate, nextW
     const wRecent = makeWorkout(NOW - 2 * DAY, [makeSet(80, 5)]); // 80% (< 90%)
     const d = data([wPr, wRecent]);
     expect(nearRecord(d, NOW)).toBeNull();
+  });
+});
+
+describe('nuevas reglas del motor de recomendaciones', () => {
+  it('baja peso si hay fallos consecutivos o fallo en ultima sesion', () => {
+    const res = recommendFor(
+      data([
+        makeWorkout(NOW, [makeSet(60, 6, 0), makeSet(60, 6, 0)]),
+        makeWorkout(NOW - 3 * DAY, [makeSet(60, 6, 0), makeSet(60, 6, 0)]),
+      ]),
+      makeEx()
+    );
+    expect(res.action).toBe('down');
+    expect(res.weightKg).toBe(57.5);
+  });
+
+  it('RIR que decide: RIR 4-5 permite subir antes, RIR 0 impide subir', () => {
+    const resEasy = recommendFor(
+      data([makeWorkout(NOW, [makeSet(60, 8, 4), makeSet(60, 8, 4)])]),
+      makeEx()
+    );
+    expect(resEasy.action).toBe('up');
+
+    const resFail = recommendFor(
+      data([makeWorkout(NOW, [makeSet(60, 8, 0), makeSet(60, 8, 0)])]),
+      makeEx()
+    );
+    expect(resFail.action).not.toBe('up');
+  });
+
+  it('regreso tras pausa: 14 dias o mas sin entrenar sugiere reducir peso', () => {
+    const oldDate = NOW - 16 * DAY;
+    const d = {
+      ...data([makeWorkout(oldDate, [makeSet(60, 8, 2)])]),
+      now: NOW,
+    };
+    const res = recommendFor(d, makeEx());
+    expect(res.action).toBe('pause');
+    expect(res.weightKg).toBe(57.5);
+  });
+
+  it('incrementos por ejercicio: aislamiento usa incremento minimo', () => {
+    const exIso = makeEx({ id: 'curl', name: 'Curl de bíceps', type: 'aislamiento', equipment: 'Mancuerna' });
+    const res = recommendFor(
+      data([
+        makeWorkout(NOW, [makeSet(20, 10, 2), makeSet(20, 10, 2)], 'curl', 'Curl de bíceps'),
+        makeWorkout(NOW - 3 * DAY, [makeSet(20, 10, 2), makeSet(20, 10, 2)], 'curl', 'Curl de bíceps'),
+      ]),
+      exIso
+    );
+    expect(res.action).toBe('up');
+    expect(res.weightKg).toBe(21.25);
+  });
+
+  it('chequeo de energia: cansado recomienda mantener', () => {
+    const d = {
+      ...data([makeWorkout(NOW, [makeSet(60, 8, 2), makeSet(60, 8, 2)])]),
+      checkin: { level: 'cansado' },
+    };
+    const res = recommendFor(d, makeEx());
+    expect(res.action).toBe('maintain');
+    expect(res.primaryRule.id).toBe('energyCheck');
   });
 });

@@ -13,10 +13,10 @@ export const loadStepFor = (unit) => LOAD_STEP[unit] || LOAD_STEP.kg;
 export const loadMinFor = (unit) => LOAD_MIN[unit] || LOAD_MIN.kg;
 export const loadFromKg = (kg, unit) => (unit === 'lb' ? (Number(kg) || 0) * KG : Number(kg) || 0);
 export const kgFromLoad = (value, unit) => (unit === 'lb' ? (Number(value) || 0) / KG : Number(value) || 0);
-export const roundLoad = (value, unit = 'kg') => {
+export const roundLoad = (value, unit = 'kg', customStep) => {
   const v = Number(value) || 0;
   if (!(v > 0)) return 0;
-  const step = loadStepFor(unit);
+  const step = customStep || loadStepFor(unit);
   const min = loadMinFor(unit);
   if (v <= min) return min;
   return Math.max(min, Math.round(v / step) * step);
@@ -30,6 +30,10 @@ export const subLoadStep = (value, unit = 'kg') => {
   const v = roundLoad(value, unit);
   if (v <= 0) return 0;
   return v <= loadStepFor(unit) ? loadMinFor(unit) : v - loadStepFor(unit);
+};
+export const loadStepForEx = (type, equipment, unit) => {
+  const isIsolation = type === 'aislamiento' || (equipment && /mancuerna|polea|cuerpo|banda/i.test(equipment));
+  return isIsolation ? loadMinFor(unit) : loadStepFor(unit);
 };
 
 export const SOURCES = {
@@ -87,6 +91,25 @@ export const SEXES = [
   { id: 'prefiero_no_decir', label: 'Prefiero no decir' },
 ];
 
+export const ENVIRONMENTS = [
+  { id: 'gimnasio', label: 'Gimnasio completo', icon: 'fitness-outline', desc: 'Acceso a barras, mancuernas, máquinas y poleas.' },
+  { id: 'casa_mancuernas', label: 'Casa con mancuernas', icon: 'home-outline', desc: 'Mancuernas, banco y peso corporal.' },
+  { id: 'calistenia', label: 'Calistenia / Sin pesas', icon: 'accessibility-outline', desc: 'Peso corporal, barras de dominadas y bandas.' },
+];
+
+export const ACTIVITY_LEVELS = [
+  { id: 'sedentario', label: 'Sedentario', icon: 'briefcase-outline', desc: 'Trabajo de oficina o estudio (poco movimiento diario).' },
+  { id: 'moderado', label: 'Moderado', icon: 'walk-outline', desc: 'Caminata diaria o actividad regular ligera.' },
+  { id: 'activo', label: 'Muy activo', icon: 'bicycle-outline', desc: 'Trabajo físico o alta actividad diaria y pasos.' },
+];
+
+export const JOINT_FOCUSES = [
+  { id: 'ninguna', label: 'Sin limitaciones', icon: 'shield-checkmark-outline', desc: 'Articulaciones sanas y sin molestias previas.' },
+  { id: 'espalda_baja', label: 'Cuidado lumbar', icon: 'fitness-outline', desc: 'Atención especial en ejercicios de columna y peso muerto.' },
+  { id: 'rodillas', label: 'Cuidado de rodillas', icon: 'body-outline', desc: 'Progresión controlada en sentadillas y zancadas.' },
+  { id: 'hombros', label: 'Cuidado de hombros', icon: 'barbell-outline', desc: 'Énfasis en calentamiento y estabilidad escapular.' },
+];
+
 export const labelOf = (list, id) => (list.find((x) => x.id === id) || list[0]).label;
 
 export const RULES = {
@@ -133,7 +156,7 @@ export const RULES = {
     detail:
       'Criterio de la app basado en el ACSM: si llevas 3 sesiones con el mismo peso sin mejorar repeticiones, ' +
       'o 14 días sin cumplir el objetivo, mantener y revisar recuperación es más seguro que subir a ciegas. ' +
-      'Si persiste, considera una semana más ligera.',
+      'Opciones concretas: cambiar rango de repeticiones, bajar un 5-10% el peso y reconstruir, o revisar sueño y alimentación.',
     source: SOURCES.acsm2009,
     kind: 'app',
   },
@@ -143,8 +166,29 @@ export const RULES = {
     detail:
       'Sin historial no inventamos un peso. Elige uno que te permita completar el rango objetivo dejando ' +
       '2-3 repeticiones en reserva (RIR 2-3). La app aprende de esa primera sesión y desde ahí recomienda números.',
-    source: SOURCES.zourdos2016,
-    kind: 'science',
+    source: SOURCES.app,
+    kind: 'app',
+  },
+  weightDrop: {
+    id: 'weightDrop',
+    title: 'Reducción de carga por fatiga o fallo',
+    detail: 'Criterio de la app basado en el ACSM: reducir la carga un 5-10% tras múltiples fallos o sesiones sin cumplir el objetivo permite recomponer la técnica y superar el bache.',
+    source: SOURCES.acsm2009,
+    kind: 'app',
+  },
+  pauseReturn: {
+    id: 'pauseReturn',
+    title: 'Retome tras periodo de pausa',
+    detail: 'Criterio de la app: tras 2 semanas o más sin entrenar un ejercicio específico, reducir ligeramente la carga previene agujetas excesivas y protege las articulaciones.',
+    source: SOURCES.app,
+    kind: 'app',
+  },
+  energyCheck: {
+    id: 'energyCheck',
+    title: 'Chequeo de energía diario',
+    detail: 'Criterio de la app: ante fatiga o energía baja reportada en el check-in, mantener el peso protege la recuperación y evita sobreentrenamiento.',
+    source: SOURCES.app,
+    kind: 'app',
   },
   preference: {
     id: 'preference',
@@ -448,6 +492,7 @@ export function recommendFor(data = {}, ex = {}) {
   const db = exerciseById(ex.id);
   const type = ex.type || (db && db.type) || 'compuesto';
   const group = ex.group || (db && db.group) || '';
+  const equipment = ex.equipment || (db && db.equipment) || '';
   const baseTarget = Math.max(1, Number(ex.reps) || 8);
   const range = repRangeFor(profile);
   const customRest = Number(ex.restSec);
@@ -529,13 +574,14 @@ export function recommendFor(data = {}, ex = {}) {
     });
   }
 
+  // La última sesión y sus series confirmadas (excluyendo unconfirmed: true) son las que mandan para tomar la decisión.
   const last = history[0];
   const top = topWeight(last);
   const info = sessionInfo(last, baseTarget);
   const weightText = (kg) => `${toDisplay(kg, unit)} ${unit}`;
   const topLoad = roundLoad(loadFromKg(top, unit), unit);
   const topKg = kgFromLoad(topLoad, unit);
-  const stepLoad = loadStepFor(unit);
+  const stepLoad = loadStepForEx(type, equipment, unit);
 
   if (history.length >= 2) {
     const prev = sessionInfo(history[1], baseTarget);
@@ -583,6 +629,58 @@ export function recommendFor(data = {}, ex = {}) {
     });
   }
 
+  // 7. Chequeo de energía diario
+  const checkinLevel = data.checkin && data.checkin.level;
+  if (checkinLevel === 'cansado' && top > 0) {
+    return finalize({
+      ...base,
+      action: 'maintain',
+      weightKg: topKg,
+      streak: 0,
+      title: 'Energía baja: mantén',
+      text: `Hoy registraste energía baja ("Cansado"). En ${name}, mantén ${weightText(topKg)} sin forzar y prioriza la técnica.`,
+      rules: [repRule, restRule, RULES.energyCheck],
+      primaryRule: RULES.energyCheck,
+    });
+  }
+
+  // 3. Regreso tras pausa (14 días o más sin entrenar el ejercicio)
+  const refNow = Number(data.now) || Date.now();
+  const daysSinceLast = last.date > 0 ? Math.round((refNow - last.date) / 864e5) : 0;
+  if (daysSinceLast >= 14 && top > 0) {
+    const pauseLoad = Math.max(loadMinFor(unit), roundLoad(topLoad - stepLoad, unit, stepLoad));
+    const pauseKg = kgFromLoad(pauseLoad, unit);
+    return finalize({
+      ...base,
+      action: 'pause',
+      weightKg: pauseKg,
+      streak: 0,
+      title: 'Regreso tras pausa',
+      text: `Llevas ${daysSinceLast} días sin entrenar ${name}. Retomemos con ${weightText(pauseKg)} (unos 10% menos) para reacondicionar los músculos sin sobrecarga.`,
+      rules: [repRule, restRule, RULES.pauseReturn],
+      primaryRule: RULES.pauseReturn,
+    });
+  }
+
+  // 1. Bajar peso si hay fallos consecutivos o fallo en última sesión sin cumplir objetivo
+  const consecutiveFails = history.length >= 2 && !sessionInfo(history[0], baseTarget).met && !sessionInfo(history[1], baseTarget).met;
+  const rirsLast = last.sets.filter((x) => !x.unconfirmed).map((x) => Number(x.rir)).filter((n) => Number.isFinite(n));
+  const hasFailure = info.failed || rirsLast.some((r) => r === 0) || (last.sets || []).some((s) => s.failure);
+  if (consecutiveFails || (hasFailure && !info.met)) {
+    const dropLoad = Math.max(loadMinFor(unit), roundLoad(topLoad - stepLoad, unit, stepLoad));
+    const dropKg = kgFromLoad(dropLoad, unit);
+    return finalize({
+      ...base,
+      action: 'down',
+      weightKg: dropKg,
+      streak: 0,
+      title: 'Baja un poco el peso',
+      text: `En ${name}, bajemos a ${weightText(dropKg)} (5-10% menos). Llevas sesiones con dificultad o fallo; recuperar la técnica y el margen es clave.`,
+      rules: [repRule, restRule, RULES.weightDrop],
+      primaryRule: RULES.weightDrop,
+    });
+  }
+
   let streak = 0;
   for (const s of history) {
     const i = sessionInfo(s, baseTarget);
@@ -592,7 +690,12 @@ export function recommendFor(data = {}, ex = {}) {
 
   const stall = detectStall(history, top, baseTarget);
 
-  if (info.strong || (info.met && info.margin && streak >= need)) {
+  // 2. RIR que decide: RIR muy alto (4-5) permite subir antes; fallo impide subir.
+  const avgRir = rirsLast.length ? rirsLast.reduce((a, b) => a + b, 0) / rirsLast.length : 2;
+  const veryEasy = avgRir >= 4 && info.met;
+  const canProgress = (info.strong || (info.met && info.margin && (streak >= need || veryEasy))) && !hasFailure;
+
+  if (canProgress) {
     const pct = topLoad > 0 ? stepLoad / topLoad : 0;
     if (pct > 0.1 && baseTarget < range.max) {
       const nextTarget = Math.min(baseTarget + 1, range.max);
@@ -608,7 +711,7 @@ export function recommendFor(data = {}, ex = {}) {
         primaryRule: RULES.progression,
       });
     }
-    const nextLoad = addLoadStep(topLoad, unit);
+    const nextLoad = roundLoad(topLoad + stepLoad, unit, stepLoad);
     const next = kgFromLoad(nextLoad, unit);
     return finalize({
       ...base,
@@ -616,7 +719,9 @@ export function recommendFor(data = {}, ex = {}) {
       weightKg: next,
       streak,
       title: 'Sube el peso',
-      text: info.strong
+      text: veryEasy
+        ? `En ${name}, sube a ${weightText(next)}. Noté que te sobraron muchas repeticiones (RIR alto), así que avanzamos antes.`
+        : info.strong
         ? `En ${name}, sube a ${weightText(next)}. Superaste el objetivo por 2 o más repeticiones.`
         : `En ${name}, sube a ${weightText(next)}. Llevas ${streak} sesión${streak === 1 ? '' : 'es'} cumpliendo el objetivo.`,
       rules: [repRule, restRule, RULES.progression, RULES.load],
@@ -632,7 +737,7 @@ export function recommendFor(data = {}, ex = {}) {
       streak,
       stallDays: stall.days,
       title: 'Revisa el estancamiento',
-      text: `Llevas ${stall.reason} con ${name} en ${weightText(topKg)} sin mejorar. Mantén el peso y revisa sueño, comida y técnica.`,
+      text: `Llevas ${stall.reason} con ${name} en ${weightText(topKg)} sin mejorar. Opciones: baja un 5-10% el peso para reconstruir, cambia temporalmente el rango de repeticiones o revisa sueño y alimentación.`,
       rules: [repRule, restRule, RULES.stall],
       primaryRule: RULES.stall,
     });

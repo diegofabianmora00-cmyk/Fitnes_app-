@@ -39,6 +39,9 @@ export const PROFILE_DEFAULT = {
   heightCm: 175,
   age: 30,
   sex: 'hombre',
+  environment: 'gimnasio',
+  activityLevel: 'moderado',
+  jointFocus: 'ninguna',
   restStyle: 'equilibrado',
   tone: 'tranquilo',
   updatedAt: null,
@@ -46,8 +49,8 @@ export const PROFILE_DEFAULT = {
 
 const LEGACY = { e1: 'press-banca', e2: 'press-militar', e3: 'fondos' };
 
-const seed = {
-  schemaVersion: 3,
+export const seed = {
+  schemaVersion: 4,
   unit: 'kg',
   profile: { ...PROFILE_DEFAULT },
   coachMemory: [],
@@ -121,7 +124,14 @@ export const migrate = (raw) => {
   const base = {
     ...seed,
     ...raw,
-    profile: { ...PROFILE_DEFAULT, tone: raw.profile?.tone || 'tranquilo', ...(raw.profile || {}) },
+    profile: {
+      ...PROFILE_DEFAULT,
+      tone: raw.profile?.tone || 'tranquilo',
+      environment: raw.profile?.environment || 'gimnasio',
+      activityLevel: raw.profile?.activityLevel || 'moderado',
+      jointFocus: raw.profile?.jointFocus || 'ninguna',
+      ...(raw.profile || {}),
+    },
     coachMemory: Array.isArray(raw.coachMemory) ? raw.coachMemory : (Array.isArray(raw.profile?.coachMemory) ? raw.profile.coachMemory : []),
   };
   const routines = (base.routines || []).map(normalizeRoutine);
