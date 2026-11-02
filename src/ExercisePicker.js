@@ -6,7 +6,7 @@ import { C } from './theme';
 import { Field, Press, T } from './ui';
 import { COMPENDIUM, GROUPS, filterExercises } from './exercises';
 
-export default function ExercisePicker({ visible, onClose, onSelect, selectedId }) {
+export default function ExercisePicker({ visible, onClose, onSelect, selectedId, allowAll = false, onSelectAll }) {
   const ins = useSafeAreaInsets();
   const [q, setQ] = useState('');
   const [group, setGroup] = useState('Todos');
@@ -65,7 +65,23 @@ export default function ExercisePicker({ visible, onClose, onSelect, selectedId 
           keyExtractor={(e) => e.id}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ padding: 18, paddingBottom: Math.max(ins.bottom, 18) + 10 }}
-          ListHeaderComponent={<T mute style={{ fontSize: 12, marginBottom: 10 }}>{list.length} ejercicios</T>}
+          ListHeaderComponent={
+            <View>
+              {allowAll && (
+                <Press
+                  onPress={() => { if (onSelectAll) onSelectAll(); else onSelect(null); onClose(); }}
+                  style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.card, borderWidth: 1, borderColor: !selectedId ? C.accent : C.line, borderRadius: 16, padding: 14, marginBottom: 12 }}
+                >
+                  <View style={{ flex: 1, marginRight: 10 }}>
+                    <T style={{ fontSize: 16, fontWeight: '600' }}>Todos los ejercicios</T>
+                    <T mute style={{ fontSize: 12, marginTop: 3 }}>Ver progreso general</T>
+                  </View>
+                  {!selectedId && <Ionicons name="checkmark-circle" size={22} color={C.accent} />}
+                </Press>
+              )}
+              <T mute style={{ fontSize: 12, marginBottom: 10 }}>{list.length} ejercicios</T>
+            </View>
+          }
           ListEmptyComponent={<T mute style={{ marginTop: 24, textAlign: 'center' }}>Sin resultados.</T>}
           ListFooterComponent={<T mute style={{ fontSize: 11, lineHeight: 16, marginTop: 10 }}>MET: {COMPENDIUM}</T>}
           renderItem={({ item }) => {

@@ -8,6 +8,12 @@ import {
   recommendFor,
   roundLoad,
   subLoadStep,
+  streakInfo,
+  periodRange,
+  periodStats,
+  progressSeries,
+  muscleShare,
+  sessionProgress,
 } from '../recommend';
 
 const DAY = 86400000;
@@ -262,5 +268,52 @@ describe('confidence y comportamiento conservador', () => {
     expect(res.confidence).toBe('baja');
     expect(res.text.toLowerCase()).toContain('aún tengo pocos datos');
     expect(res.rules.some((r) => r.id === 'lowConfidence')).toBe(true);
+  });
+});
+
+describe('nuevas funciones de progreso y rachas', () => {
+  it('streakInfo calcula racha con descansos en medio y hoy sin entrenar', () => {
+    // Choose a Monday: 2026-10-05
+    const monday = new Date('2026-10-05T10:00:00Z').getTime();
+    const wednesday = new Date('2026-10-07T10:00:00Z').getTime();
+    const d = {
+      ...data([
+        makeWorkout(wednesday, [makeSet(60, 8)]),
+        makeWorkout(monday, [makeSet(60, 8)]),
+      ]),
+      routines: [{ id: 'r1', days: [0, 2, 4] }], // Mon, Wed, Fri
+    };
+    const info = streakInfo(d, wednesday);
+    expect(info.current).toBeGreaterThanOrEqual(1);
+    expect(info.week.length).toBe(7);
+  });
+
+  it('streakInfo sin days usa criterio de la app', () => {
+    const d = data([
+      makeWorkout(NOW, [makeSet(60, 8)]),
+      makeWorkout(NOW - DAY, [makeSet(60, 8)]),
+    ]);
+    const info = streakInfo(d, NOW);
+    expect(info.current).toBeGreaterThanOrEqual(1);
+  });
+
+  it('periodRange maneja rango personalizado y datos sin unit', () => {
+    const r = periodRange('Personalizado', NOW, '2026-10-01', '2026-10-10');
+    expect(r.start).toBeDefined();
+    expect(r.end).toBeDefined();
+    const stats = periodStats({ workouts: [], unit: undefined }, r);
+    expect(stats.sessions).toBe(0);
+  });
+
+  it('progressSeries, muscleShare y sessionProgress funcionan correctamente', () => {
+    const w = makeWorkout(NOW, [makeSet(60, 8)]);
+    w.score = { score: 85 };
+    const d = data([w]);
+    const series = progressSeries(d, periodRange('30 días', NOW), 'Puntaje');
+    expect(series.length).toBe(1);
+    const ms = muscleShare(d, periodRange('30 días', NOW));
+    expect(Array.isArray(ms)).toBe(true);
+    const sp = sessionProgress(d, w);
+    expect(sp).toBeNull();
   });
 });

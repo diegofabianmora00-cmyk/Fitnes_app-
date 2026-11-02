@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Dimensions, Modal, ScrollView, View } from 'react-native';
+import { Animated, Dimensions, Modal, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { C } from './theme';
@@ -83,11 +83,12 @@ function Mark({ item, unit }) {
 }
 
 export default function SessionReview({ visible, review, records = [], workout = null, onClose }) {
-  const { data } = useStore();
+  const { data, update } = useStore();
   const ins = useSafeAreaInsets();
   const [step, setStep] = useState(records.length ? 0 : 1);
   const [showScore, setShowScore] = useState(false);
   const [showRest, setShowRest] = useState(false);
+  const [comment, setComment] = useState(() => (workout ? (workout.comment || '') : ''));
   const unit = data.unit;
   const bodyKg = Number(data.profile && data.profile.weightKg) || 0;
   const kcal = workout ? workoutKcal(workout, bodyKg) : 0;
@@ -97,8 +98,20 @@ export default function SessionReview({ visible, review, records = [], workout =
       setStep(records.length ? 0 : 1);
       setShowScore(false);
       setShowRest(false);
+      setComment(workout ? (workout.comment || '') : '');
     }
-  }, [visible, records]);
+  }, [visible, records, workout]);
+
+  const handleCommentChange = (text) => {
+    setComment(text);
+    if (workout) {
+      workout.comment = text;
+      update((d) => ({
+        ...d,
+        workouts: (d.workouts || []).map((w) => (w.id === workout.id ? { ...w, comment: text } : w)),
+      }));
+    }
+  };
 
   const close = () => {
     if (step === 0 && review) setStep(1);
@@ -219,6 +232,29 @@ export default function SessionReview({ visible, review, records = [], workout =
                 )}
               </Card>
             )}
+
+            <Card style={{ marginTop: 12 }}>
+              <T style={{ fontWeight: '700', fontSize: 16, marginBottom: 8 }}>Comentario</T>
+              <TextInput
+                value={comment}
+                onChangeText={handleCommentChange}
+                multiline
+                placeholder="Escribe cómo te sentiste, qué cambiarías o qué notaste…"
+                placeholderTextColor={C.mute}
+                style={{
+                  height: 110,
+                  backgroundColor: C.field,
+                  borderWidth: 1,
+                  borderColor: C.line,
+                  borderRadius: 14,
+                  padding: 12,
+                  color: C.text,
+                  fontSize: 15,
+                  textAlignVertical: 'top',
+                }}
+              />
+              <T mute style={{ fontSize: 13, marginTop: 8 }}>Puedes escribirlo durante el entreno y editarlo aquí cuando quieras.</T>
+            </Card>
 
             <Btn label="Cerrar" onPress={onClose} style={{ marginTop: 18 }} />
             {!review && <T mute style={{ textAlign: 'center', fontSize: 12, marginTop: 12 }}>Los datos de esta sesión quedaron guardados.</T>}

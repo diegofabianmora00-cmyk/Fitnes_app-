@@ -33,16 +33,14 @@ no los crees ni los edites.
 - src/screens/ProfileSetup.js: cuestionario inicial / edición del perfil.
 - src/screens/Workout.js: overlay con Iniciar/Terminar serie, descanso real, RIR,
   guardado de la sesión, PR y resumen.
-- src/screens/Progress.js: estadísticas, gráfica de barras por ejercicio, historial.
-- src/screens/Settings.js: kg/lb, editar perfil, exportar, borrar datos.
+- src/screens/Progress.js: estadísticas, gráfica de área SVG con filtros de métrica y ejercicio, racha, aviso de estancamiento, récords, músculos trabajados e historial paginado.
+- src/screens/progress/StreakCard.js, PeriodPicker.js, ProgressChart.js, StatGrid.js, CoachCard.js, PrCard.js, MuscleCard.js, HistoryList.js, SessionDetail.js, EmptyProgress.js: componentes modulares de la interfaz de Progreso.
+- src/Settings.js: kg/lb, editar perfil, exportar, borrar datos.
 - src/coachMemory.js: cerebro de los mensajes de Atlas (lógica pura y plantillas).
 - jest.config.js: preset 'jest-expo' para pruebas.
 - src/__tests__/recommend.test.js: pruebas unitarias del motor puro (jest).
 - src/__tests__/coachMemory.test.js: pruebas unitarias del cerebro de mensajes de Atlas (jest).
-- docs/decisiones.md: reglas del motor (progresión, estancamiento, descanso, PR, puntaje).
-  Léelo ANTES de tocar recommend.js o el puntaje/PR de Workout.js y SessionReview.js.
-- docs/diseno-entrenamiento.md: diseño visual del flujo de entrenamiento. Léelo solo si
-  vas a cambiar la interfaz de Workout.
+- docs/decisiones.md: reglas del motor (progresión, estancamiento, descanso, PR, puntaje, e1RM y racha).
 
 ## Datos (pesos siempre en kg)
 Claves de AsyncStorage:
@@ -58,7 +56,7 @@ profile: { goal, ambition, level, daysPerWeek, weightKg, heightCm, age, sex,
   restStyle, tone, completed, updatedAt },
 coachMemory: [string], // últimos 8 ids de mensajes mostrados por Atlas
 routines: [{ id, name, goal, days: [0..6], defaults: { sets, reps, restSec }, exercises: [{ id, name, group, equipment, sets, reps, mode, rir }] }],
-workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName,
+workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName, comment,
   prs: [{ exId, name, kind, weightKg, reps }],
   score: { score, grade, components, restNotes, durationSec },
   exercises: [{ exId, name, targetReps, targetSets, targetRestSec, recWeightKg,
@@ -102,10 +100,6 @@ workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName,
 
 ## Estado
 - Hecho: app base, base de ejercicios, perfil, motor de recomendación, entrenamiento
-  guiado, calorías, gráficas básicas, pruebas del motor (15), arreglos de los fallos
-  1 al 9, 11 y 12, y rediseño completo de la pestaña Rutinas (Mi semana y asistente de 2 pasos).
+  guiado, calorías, gráficas básicas, pruebas del motor (28), rediseño completo de la pestaña Rutinas y rediseño completo de la pestaña Progreso (racha, periodos, gráfica de área SVG, métricas, aviso de estancamiento, récords, músculos, historial paginado, detalle de sesión modal y comentario en entreno).
 - Por confirmar: fallo 10 (fuente Inter en H y Btn de src/ui.js); no consta como hecho.
-- Pendiente: mejoras (e1RM y puntaje separado, Inicio, Progreso, Ajustes, salud y
-  lesiones, configuración y accesibilidad, almacenamiento por mes) e ideas (memoria y
-  tono de Atlas, explicación con fuente, manos libres, confianza, "tengo poco tiempo",
-  privacidad, tarjeta semanal).
+- Pendiente: mejoras (Inicio, Ajustes, salud y lesiones, configuración y accesibilidad, almacenamiento por mes).

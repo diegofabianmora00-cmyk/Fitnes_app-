@@ -919,3 +919,285 @@ export function coachMessage(data = {}) {
     return { mood: 'happy', text: 'Buen trabajo. Sigue así.', rule: null, rules: [] };
   }
 }
+
+export function streakInfo(data = {}, hoyMs = Date.now()) {
+  const workouts = data.workouts || [];
+  const routines = data.routines || [];
+  const assignedDays = new Set();
+  routines.forEach((r) => {
+    (r.days || []).forEach((d) => {
+      if (typeof d === 'number' && d >= 0 && d <= 6) assignedDays.add(d);
+    });
+  });
+
+  const hasAssigned = assignedDays.size > 0;
+  const todayDate = new Date(hoyMs);
+  todayDate.setHours(0, 0, 0, 0);
+  const todayStartMs = todayDate.getTime();
+
+  const workoutDays = new Set();
+  workouts.forEach((w) => {
+    if (!w.date) return;
+    const d = new Date(w.date);
+    d.setHours(0, 0, 0, 0);
+    workoutDays.add(d.getTime());
+  });
+
+  const dayOfWeek = (todayDate.getDay() + 6) % 7;
+  const mondayMs = todayStartMs - dayOfWeek * 86400000;
+  const weekDays = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+  const week = [];
+
+  for (let i = 0; i < 7; i++) {
+    const dMs = mondayMs + i * 86400000;
+    const isToday = dMs === todayStartMs;
+    const hasWorkout = workoutDays.has(dMs);
+    const isAssigned = assignedDays.has(i);
+
+    let state = 'rest';
+    if (hasWorkout) {
+      state = 'trained';
+    } else if (isToday) {
+      state = 'today';
+    } else {
+      state = 'rest';
+    }
+    week.push({ day: weekDays[i], state, dateMs: dMs, isToday, hasWorkout });
+  }
+
+  let current = 0;
+  let best = 0;
+  const sortedWDays = Array.from(workoutDays).sort((a, b) => a - b);
+
+  if (hasAssigned) {
+    if (sortedWDays.length > 0) {
+      let active = 0;
+      let maxA = 0;
+      const startMs = sortedWDays[0];
+      for (let m = startMs; m <= todayStartMs; m += 86400000) {
+        const dObj = new Date(m);
+        const dayIdx = (dObj.getDay() + 6) % 7;
+        const isSched = assignedDays.has(dayIdx);
+        const hasW = workoutDays.has(m);
+
+        if (isSched) {
+          if (hasW) {
+            active++;
+            if (active > maxA) maxA = active;
+          } else {
+            if (m !== todayStartMs) {
+              active = 0;
+            }
+          }
+        }
+      }
+      current = active;
+      best = maxA;
+    }
+  } else {
+    if (sortedWDays.length > 0) {
+      let cur = 1;
+      let maxS = 1;
+      for (let i = 1; i < sortedWDays.length; i++) {
+        const diffDays = Math.round((sortedWDays[i] - sortedWDays[i - 1]) / 86400000);
+        if (diffDays <= 2) {
+          cur++;
+        } else {
+          cur = 1;
+        }
+        if (cur > maxS) maxS = cur;
+      }
+      const lastW = sortedWDays[sortedWDays.length - 1];
+      const daysSinceLast = Math.round((todayStartMs - lastW) / 86400000);
+      if (daysSinceLast > 2 && todayStartMs !== lastW) {
+        current = 0;
+      } else {
+        current = cur;
+      }
+      best = Math.max(maxS, current);
+    }
+  }
+
+  return { current: Math.max(0, current), best: Math.max(best, current), week };
+}
+
+export function periodRange(opcion = '30 días', hoyMs = Date.now(), desde = null, hasta = null) {
+  const end = hoyMs;
+  let start = end;
+  let prevStart = null;
+  let prevEnd = null;
+
+  if (opcion === '7 días' || opcion === '7d' || opcion === 7) {
+    const dur = 7 * 86400000;
+    start = end - dur;
+    prevStart = start - dur;
+    prevEnd = start;
+  } else if (opcion === '30 días' || opcion === '30d' || opcion === 30) {
+    const dur = 30 * 86400000;
+    start = end - dur;
+    prevStart = start - dur;
+    prevEnd = start;
+  } else if (opcion === '90 días' || opcion === '90d' || opcion === 90) {
+    const dur = 90 * 86400000;
+    start = end - dur;
+    prevStart = start - dur;
+    prevEnd = start;
+  } else if (opcion === 'Todo' || opcion === 'all') {
+    start = 0;
+    prevStart = null;
+    prevEnd = null;
+  } else if (opcion === 'Personalizado' || opcion === 'custom') {
+    start = desde ? new Date(desde).getTime() : end - 30 * 86400000;
+    const endMs = hasta ? new Date(hasta).getTime() : end;
+    const dur = Math.max(86400000, endMs - start);
+    prevStart = start - dur;
+    prevEnd = start;
+  } else {
+    const dur = 30 * 86400000;
+    start = end - dur;
+    prevStart = start - dur;
+    prevEnd = start;
+  }
+
+  return { start, end, prevStart, prevEnd, label: opcion };
+}
+
+export function periodStats(data = {}, rango = {}, exId = null) {
+  const workouts = data.workouts || [];
+  const routines = data.routines || [];
+
+  const filterWorkouts = (sMs, eMs) => {
+    if (sMs === 0) return workouts;
+    return workouts.filter((w) => {
+      const d = w.date || 0;
+      return d >= sMs && d <= eMs;
+    });
+  };
+
+  const ws = filterWorkouts(rango.start, rango.end);
+  const prevWs = rango.prevStart !== null ? filterWorkouts(rango.prevStart, rango.prevEnd) : [];
+
+  const sessionsCount = ws.length;
+  const prevSessionsCount = prevWs.length;
+
+  const recordsCount = ws.reduce((a, w) => a + (w.prs || []).length, 0);
+  const prevRecordsCount = prevWs.reduce((a, w) => a + (w.prs || []).length, 0);
+
+  const timeSec = ws.reduce((a, w) => a + (Number(w.durationSec) || 0), 0);
+  const prevTimeSec = prevWs.reduce((a, w) => a + (Number(w.durationSec) || 0), 0);
+
+  const assignedDaysCount = routines.reduce((acc, r) => acc + (r.days || []).length, 0);
+  let consistency = '—';
+  let prevConsistency = '—';
+
+  if (assignedDaysCount > 0 && rango.start > 0) {
+    const totalDays = Math.max(1, Math.round((rango.end - rango.start) / 86400000));
+    const weeks = totalDays / 7;
+    const expected = Math.round(weeks * assignedDaysCount);
+    consistency = expected > 0 ? `${Math.min(100, Math.round((sessionsCount / expected) * 100))}%` : '—';
+    if (rango.prevStart !== null) {
+      prevConsistency = expected > 0 ? `${Math.min(100, Math.round((prevSessionsCount / expected) * 100))}%` : '—';
+    }
+  }
+
+  const avgScore = sessionsCount ? Math.round(ws.reduce((a, w) => a + (w.score?.score || 0), 0) / sessionsCount) : 0;
+  const prevAvgScore = prevSessionsCount ? Math.round(prevWs.reduce((a, w) => a + (w.score?.score || 0), 0) / prevSessionsCount) : 0;
+  const diffScore = avgScore - prevAvgScore;
+
+  return {
+    sessions: sessionsCount,
+    prevSessions: prevSessionsCount,
+    sessionsDiff: sessionsCount - prevSessionsCount,
+    records: recordsCount,
+    prevRecords: prevRecordsCount,
+    recordsDiff: recordsCount - prevRecordsCount,
+    timeSec,
+    prevTimeSec,
+    consistency,
+    prevConsistency,
+    avgScore,
+    prevAvgScore,
+    diffScore,
+  };
+}
+
+export function progressSeries(data = {}, rango = {}, metrica = 'Puntaje', exId = null) {
+  const workouts = [...(data.workouts || [])].sort((a, b) => (a.date || 0) - (b.date || 0));
+  const filtered = workouts.filter((w) => {
+    const d = w.date || 0;
+    if (rango.start > 0 && (d < rango.start || d > rango.end)) return false;
+    if (exId) {
+      return (w.exercises || []).some((e) => e.exId === exId);
+    }
+    return true;
+  });
+
+  return filtered.map((w) => {
+    const d = w.date || Date.now();
+    let val = 0;
+    if (metrica === 'Puntaje' || metrica === 'score') {
+      val = w.score?.score || 0;
+    } else {
+      const exercises = exId ? (w.exercises || []).filter((e) => e.exId === exId) : (w.exercises || []);
+      const validSets = exercises.flatMap((e) => (e.sets || []).filter((s) => !s.unconfirmed && Number(s.r) > 0));
+
+      if (metrica === 'Peso' || metrica === 'weight') {
+        val = validSets.length ? Math.max(...validSets.map((s) => Number(s.w) || 0)) : 0;
+      } else if (metrica === 'Volumen' || metrica === 'volume') {
+        val = validSets.reduce((acc, s) => acc + (Number(s.w) || 0) * (Number(s.r) || 0), 0);
+      } else if (metrica === 'e1RM' || metrica === 'e1rm') {
+        const e1rms = validSets.map((s) => {
+          const w = Number(s.w) || 0;
+          const r = Number(s.r) || 0;
+          if (w <= 0 || r <= 0) return 0;
+          return w * (1 + r / 30);
+        });
+        val = e1rms.length ? Math.max(...e1rms) : 0;
+      }
+    }
+    return { date: d, value: Math.round(val * 10) / 10 };
+  });
+}
+
+export function muscleShare(data = {}, rango = {}) {
+  const workouts = data.workouts || [];
+  const filtered = workouts.filter((w) => {
+    const d = w.date || 0;
+    if (rango.start > 0 && (d < rango.start || d > rango.end)) return false;
+    return true;
+  });
+
+  const groupCounts = {};
+  let totalSets = 0;
+
+  filtered.forEach((w) => {
+    (w.exercises || []).forEach((e) => {
+      const db = exerciseById(e.exId);
+      const group = e.group || (db && db.group) || 'Otros';
+      const sets = (e.sets || []).filter((s) => !s.unconfirmed && Number(s.r) > 0).length;
+      if (sets > 0) {
+        groupCounts[group] = (groupCounts[group] || 0) + sets;
+        totalSets += sets;
+      }
+    });
+  });
+
+  const list = Object.entries(groupCounts).map(([group, count]) => ({
+    group,
+    count,
+    pct: totalSets > 0 ? Math.round((count / totalSets) * 100) : 0,
+  })).sort((a, b) => b.count - a.count);
+
+  return list.slice(0, 3);
+}
+
+export function sessionProgress(data = {}, workout = {}) {
+  const workouts = [...(data.workouts || [])].sort((a, b) => (b.date || 0) - (a.date || 0));
+  const idx = workouts.findIndex((w) => w.id === workout.id);
+  let prev = null;
+  if (idx !== -1 && idx < workouts.length - 1) {
+    prev = workouts.slice(idx + 1).find((w) => w.routineId === workout.routineId) || workouts[idx + 1];
+  }
+  if (!prev || !prev.score || !workout.score) return null;
+  return workout.score.score - prev.score.score;
+}

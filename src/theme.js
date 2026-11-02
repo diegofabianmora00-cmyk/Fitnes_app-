@@ -27,4 +27,10 @@ export const C = {
   gradPlay0: '#A8FADC',
   gradPlay1: '#4FE0B0',
   playTriangle: '#06241A',
+  softText: '#C5CCD6',
+  muteText: '#8B95A5',
+  borderDashed: '#2A323D',
+  dimNum: '#4A5361',
+  amber: '#F2C46D',
+  amberDim: '#2A2312',
 };
