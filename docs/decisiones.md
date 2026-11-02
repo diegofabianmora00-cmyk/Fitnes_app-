@@ -28,3 +28,9 @@ Este documento detalla las reglas, heurísticas y fórmulas científicas o de cr
 - **Criterio de la app:** 
   - Si una rutina tiene días asignados (`routine.days`), la racha cuenta los días de entrenamiento consecutivos omitiendo los días de descanso sin rutina (no suman ni cortan).
   - Si una rutina no tiene días asignados (rutinas antiguas o libres), se permite hasta 1 día sin sesión entre dos sesiones para mantener la racha activa ("criterio de la app").
+
+## 7. Cerca de un récord y estimación de duración y pesos
+- **Criterio de la app:**
+  - **Cerca de un récord (`nearRecord`):** Detecta cuando el mejor peso confirmado en los últimos 14 días se encuentra entre el 90% y el 99.9% del récord personal de ese ejercicio (`personalRecords`), calculando la brecha (`gapKg`) y la relación (`ratio`). Se ignoran series sin confirmar (`unconfirmed: true`).
+  - **Estimado de duración (`routineEstimate`):** Promedio redondeado de la duración en minutos de las últimas sesiones (hasta 3) de una rutina específica.
+  - **Consejo de peso siguiente (`nextWeightHint`):** Prepara el mensaje contextual con el primer ejercicio de la próxima rutina basándose en `recommendFor`.

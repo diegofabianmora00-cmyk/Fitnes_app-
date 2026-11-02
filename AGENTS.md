@@ -29,6 +29,7 @@ no los crees ni los edites.
 - src/RuleInfo.js: modal que explica reglas y fuentes.
 - src/SessionReview.js: celebración de PR y resumen/puntaje de sesión.
 - src/screens/Home.js: mensaje de Atlas, reglas, siguiente rutina, semana.
+- src/screens/home/DayHeader.js, AtlasMessage.js, TodayGoal.js, TomorrowCard.js, NearRecordCard.js, QuickSummary.js: componentes modulares de la interfaz de Inicio (estado día de descanso).
 - src/screens/Routines.js: pestaña "Mi semana" y asistente de 2 pasos para crear/editar rutinas y configurar ejercicios.
 - src/screens/ProfileSetup.js: cuestionario inicial / edición del perfil.
 - src/screens/Workout.js: overlay con Iniciar/Terminar serie, descanso real, RIR,
@@ -51,7 +52,7 @@ Claves de AsyncStorage:
 - fitnesscoach:v1:backup: respaldo legado; solo se usa como segunda opción al restaurar.
 - fitnesscoach:v1:draft: borrador del entreno en curso (rutina, inicio, series y posición);
   se borra al terminar o descartar.
-data = { schemaVersion: 2, unit,
+data = { schemaVersion: 2, unit, checkin: { date, level },
 profile: { goal, ambition, level, daysPerWeek, weightKg, heightCm, age, sex,
   restStyle, tone, completed, updatedAt },
 coachMemory: [string], // últimos 8 ids de mensajes mostrados por Atlas
@@ -100,6 +101,6 @@ workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName, 
 
 ## Estado
 - Hecho: app base, base de ejercicios, perfil, motor de recomendación, entrenamiento
-  guiado, calorías, gráficas básicas, pruebas del motor (28), rediseño completo de la pestaña Rutinas y rediseño completo de la pestaña Progreso (racha, periodos, gráfica de área SVG, métricas, aviso de estancamiento, récords, músculos, historial paginado, detalle de sesión modal y comentario en entreno).
+  guiado, calorías, gráficas básicas, pruebas del motor (34), rediseño completo de la pestaña Rutinas, rediseño completo de la pestaña Progreso, y rediseño completo de la pestaña Inicio (estado día de descanso, chequeo de energía, tarjeta de mañana, récord cercano y resumen rápido).
 - Por confirmar: fallo 10 (fuente Inter en H y Btn de src/ui.js); no consta como hecho.
-- Pendiente: mejoras (Inicio, Ajustes, salud y lesiones, configuración y accesibilidad, almacenamiento por mes).
+- Pendiente: mejoras (Ajustes, salud y lesiones, configuración y accesibilidad, almacenamiento por mes).

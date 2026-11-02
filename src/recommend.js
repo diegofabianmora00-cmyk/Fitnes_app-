@@ -217,6 +217,20 @@ export const RULES = {
     source: SOURCES.app,
     kind: 'app',
   },
+  routineEstimate: {
+    id: 'routineEstimate',
+    title: 'Estimado de duración',
+    detail: 'Criterio de la app: promedio de duración de tus últimas sesiones de esta rutina.',
+    source: SOURCES.app,
+    kind: 'app',
+  },
+  nearRecord: {
+    id: 'nearRecord',
+    title: 'Cerca de un récord',
+    detail: 'Criterio de la app: detecta cuando tu mejor peso reciente (últimos 14 días) está entre el 90% y el 100% (sin alcanzarlo) de tu récord personal.',
+    source: SOURCES.app,
+    kind: 'app',
+  },
 };
 
 export const CONFIDENCE_NEEDED = 4;
@@ -1200,4 +1214,106 @@ export function sessionProgress(data = {}, workout = {}) {
   }
   if (!prev || !prev.score || !workout.score) return null;
   return workout.score.score - prev.score.score;
+}
+
+export function nextRoutineDay(data = {}, hoy = Date.now()) {
+  const routines = data.routines || [];
+  if (!routines.length) return null;
+  const now = new Date(hoy);
+  now.setHours(0, 0, 0, 0);
+  const todayDayIdx = (now.getDay() + 6) % 7; // 0 = Lunes
+
+  for (let i = 1; i <= 7; i++) {
+    const targetDayIdx = (todayDayIdx + i) % 7;
+    const targetDate = new Date(now.getTime() + i * 86400000);
+    const matchingRoutine = routines.find((r) => Array.isArray(r.days) && r.days.includes(targetDayIdx));
+    if (matchingRoutine) {
+      return { routine: matchingRoutine, date: targetDate, daysAway: i };
+    }
+  }
+  return null;
+}
+
+export function routineEstimate(data = {}, routine = {}) {
+  const exercisesCount = (routine.exercises || []).length;
+  const workouts = (data.workouts || []).filter((w) => w.routineId === routine.id && Number(w.durationSec) > 0);
+  workouts.sort((a, b) => (b.date || 0) - (a.date || 0));
+  const recent = workouts.slice(0, 3);
+  if (!recent.length) {
+    return { exercises: exercisesCount, minutes: null };
+  }
+  const avgSec = recent.reduce((acc, w) => acc + Number(w.durationSec), 0) / recent.length;
+  const minutes = Math.max(1, Math.round(avgSec / 60));
+  return { exercises: exercisesCount, minutes };
+}
+
+export function nextWeightHint(data = {}, routine = {}) {
+  const exercises = routine.exercises || [];
+  if (!exercises.length) return 'Atlas ya preparó tus pesos para la sesión.';
+  const firstEx = exercises[0];
+  const rec = recommendFor(data, firstEx);
+  const unit = data.unit || 'kg';
+  const name = firstEx.name || 'ejercicio';
+
+  if (rec.action === 'up' && rec.weightKg > 0) {
+    const weightStr = `${toDisplay(rec.weightKg, unit)} ${unit}`;
+    return `Atlas ya preparó tus pesos. En ${name} te toca subir a ${weightStr}.`;
+  } else if (rec.action === 'maintain' && rec.weightKg > 0) {
+    const weightStr = `${toDisplay(rec.weightKg, unit)} ${unit}`;
+    return `Atlas ya preparó tus pesos. En ${name} mantén ${weightStr}.`;
+  } else if (rec.action === 'stall' && rec.weightKg > 0) {
+    const weightStr = `${toDisplay(rec.weightKg, unit)} ${unit}`;
+    return `Atlas ya preparó tus pesos. En ${name} mantén ${weightStr}.`;
+  } else {
+    return `Atlas ya preparó tus pesos. En ${name} elige un peso con el que completes el rango dejando 2-3 reps en reserva.`;
+  }
+}
+
+export function nearRecord(data = {}, hoy = Date.now()) {
+  const prs = personalRecords(data);
+  const workouts = data.workouts || [];
+  const fourteenDaysAgo = hoy - 14 * 86400000;
+
+  let bestCandidate = null;
+
+  Object.entries(prs).forEach(([exId, pr]) => {
+    const prKg = Number(pr.weightKg) || 0;
+    if (!(prKg > 0)) return;
+
+    let recentMaxKg = 0;
+    workouts.forEach((w) => {
+      if ((w.date || 0) < fourteenDaysAgo || (w.date || 0) > hoy) return;
+      (w.exercises || []).forEach((e) => {
+        if (e.exId !== exId) return;
+        (e.sets || []).forEach((s) => {
+          if (s.unconfirmed) return;
+          const kg = Number(s.w) || 0;
+          const r = Number(s.r) || 0;
+          if (r > 0 && kg > recentMaxKg) {
+            recentMaxKg = kg;
+          }
+        });
+      });
+    });
+
+    if (recentMaxKg > 0 && recentMaxKg < prKg) {
+      const ratio = recentMaxKg / prKg;
+      if (ratio >= 0.90 && ratio < 1.0) {
+        const gapKg = prKg - recentMaxKg;
+        if (!bestCandidate || ratio > bestCandidate.ratio) {
+          bestCandidate = {
+            exId,
+            name: pr.name,
+            prKg,
+            prReps: pr.reps,
+            recentKg: recentMaxKg,
+            gapKg,
+            ratio,
+          };
+        }
+      }
+    }
+  });
+
+  return bestCandidate;
 }

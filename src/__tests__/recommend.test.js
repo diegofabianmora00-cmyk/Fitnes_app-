@@ -14,6 +14,10 @@ import {
   progressSeries,
   muscleShare,
   sessionProgress,
+  nextRoutineDay,
+  routineEstimate,
+  nextWeightHint,
+  nearRecord,
 } from '../recommend';
 
 const DAY = 86400000;
@@ -315,5 +319,84 @@ describe('nuevas funciones de progreso y rachas', () => {
     expect(Array.isArray(ms)).toBe(true);
     const sp = sessionProgress(d, w);
     expect(sp).toBeNull();
+  });
+});
+
+describe('funciones de inicio y descanso (nextRoutineDay, routineEstimate, nextWeightHint, nearRecord)', () => {
+  it('nextRoutineDay encuentra la próxima rutina cruzando el fin de semana', () => {
+    // Friday (day 4), routine on Monday (day 0) next week
+    const friday = new Date('2026-10-09T10:00:00Z').getTime(); // Fri
+    const d = {
+      ...data([]),
+      routines: [{ id: 'r1', name: 'Pecho', days: [0], exercises: [makeEx()] }], // Monday = 0
+    };
+    const res = nextRoutineDay(d, friday);
+    expect(res).not.toBeNull();
+    expect(res.routine.name).toBe('Pecho');
+    expect(res.daysAway).toBe(3); // Fri -> Sat (1), Sun (2), Mon (3)
+  });
+
+  it('nextRoutineDay devuelve null si no hay rutinas con days', () => {
+    const d = {
+      ...data([]),
+      routines: [{ id: 'r1', name: 'Pecho', days: [], exercises: [] }],
+    };
+    expect(nextRoutineDay(d, NOW)).toBeNull();
+  });
+
+  it('routineEstimate calcula minutos con y sin sesiones previas', () => {
+    const routine = { id: 'r1', exercises: [makeEx(), makeEx()] };
+    const d1 = data([]);
+    const est1 = routineEstimate(d1, routine);
+    expect(est1.exercises).toBe(2);
+    expect(est1.minutes).toBeNull();
+
+    const w = makeWorkout(NOW, [makeSet(60, 8)]);
+    w.routineId = 'r1';
+    w.durationSec = 3600; // 60 min
+    const d2 = data([w]);
+    const est2 = routineEstimate(d2, routine);
+    expect(est2.minutes).toBe(60);
+  });
+
+  it('nextWeightHint da recomendacion de subir, mantener o sin historial', () => {
+    const routine = { id: 'r1', exercises: [makeEx()] };
+    // Sin historial
+    const hintNoHist = nextWeightHint(data([]), routine);
+    expect(hintNoHist).toContain('elige un peso');
+
+    // Con historial para subir
+    const w1 = makeWorkout(NOW, [makeSet(60, 10), makeSet(60, 10), makeSet(60, 10)]);
+    const w2 = makeWorkout(NOW - 3 * DAY, [makeSet(60, 8), makeSet(60, 8), makeSet(60, 8)]);
+    w1.routineId = 'r1'; w2.routineId = 'r1';
+    const hintUp = nextWeightHint(data([w1, w2]), routine);
+    expect(hintUp).toContain('subir');
+  });
+
+  it('nearRecord detecta dentro del rango del 90%, ignora unconfirmed y maneja datos sin unit', () => {
+    // Record of 100kg
+    const wPr = makeWorkout(NOW - 20 * DAY, [makeSet(100, 5)]);
+    // Recent lift of 95kg (95% of 100kg -> within 90-100%)
+    const wRecent = makeWorkout(NOW - 2 * DAY, [makeSet(95, 5)]);
+    // Unconfirmed lift of 98kg should be ignored
+    const wUnconf = makeWorkout(NOW - 1 * DAY, [makeSet(98, 5, 2, true)]);
+
+    const d = {
+      ...data([wPr, wRecent, wUnconf]),
+      unit: undefined, // datos viejos sin unit
+    };
+
+    const nr = nearRecord(d, NOW);
+    expect(nr).not.toBeNull();
+    expect(nr.prKg).toBe(100);
+    expect(nr.recentKg).toBe(95);
+    expect(nr.ratio).toBe(0.95);
+  });
+
+  it('nearRecord devuelve null si fuera del rango del 90%', () => {
+    const wPr = makeWorkout(NOW - 20 * DAY, [makeSet(100, 5)]);
+    const wRecent = makeWorkout(NOW - 2 * DAY, [makeSet(80, 5)]); // 80% (< 90%)
+    const d = data([wPr, wRecent]);
+    expect(nearRecord(d, NOW)).toBeNull();
   });
 });
