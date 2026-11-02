@@ -7,10 +7,13 @@ import { uid, useStore, routinesForDay } from '../store';
 import { GROUPS, filterExercises } from '../exercises';
 import { GOALS } from '../recommend';
 import Coach from '../Coach';
+import CustomExerciseModal from '../CustomExerciseModal';
 
 const DAYS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const DAY_NAMES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 const DAY_ABBR = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
+const TODAY_IDX = (new Date().getDay() + 6) % 7;
+const goalLabel = (id) => (GOALS.find((g) => g.id === id) || GOALS[1]).label;
 
 const formatRest = (sec) => {
   const s = Number(sec) || 120;
@@ -19,8 +22,32 @@ const formatRest = (sec) => {
   return `${m}:${String(rem).padStart(2, '0')}`;
 };
 
+function Stepper({ value, onChange, min = 1, max = 99, disabled, display }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Press
+        disabled={disabled}
+        onPress={() => onChange(Math.max(min, value - 1))}
+        style={{ width: 52, height: 52, borderRadius: 16, backgroundColor: C.card2, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' }}
+        accessibilityLabel="Disminuir"
+      >
+        <T style={{ fontSize: 22, fontWeight: '700', color: disabled ? C.mute : C.text }}>−</T>
+      </Press>
+      <T style={{ fontSize: 34, fontWeight: '800', color: disabled ? C.mute : C.text }}>{display ? display(value) : String(value).padStart(2, '0')}</T>
+      <Press
+        disabled={disabled}
+        onPress={() => onChange(Math.min(max, value + 1))}
+        style={{ width: 52, height: 52, borderRadius: 16, backgroundColor: C.card2, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' }}
+        accessibilityLabel="Aumentar"
+      >
+        <T style={{ fontSize: 22, fontWeight: '700', color: disabled ? C.mute : C.text }}>+</T>
+      </Press>
+    </View>
+  );
+}
+
 function Editor({ routine, onClose }) {
-  const { update } = useStore();
+  const { update, data } = useStore();
   const [step, setStep] = useState('datos'); // 'datos' | 'ejercicios' | 'config'
   const [r, setR] = useState({
     id: routine.id || uid(),
@@ -35,6 +62,8 @@ function Editor({ routine, onClose }) {
     })),
   });
   const [activeGroup, setActiveGroup] = useState('Todos');
+  const [query, setQuery] = useState('');
+  const [customModal, setCustomModal] = useState(false);
   const [configIdx, setConfigIdx] = useState(null);
 
   const updateField = (k, v) => setR(prev => ({ ...prev, [k]: v }));
@@ -48,6 +77,13 @@ function Editor({ routine, onClose }) {
   };
 
   const isSelectedExercise = (exId) => r.exercises.some(e => e.id === exId);
+
+  const addAndOpen = (item) => {
+    const idx = r.exercises.length;
+    toggleExercise(item);
+    setConfigIdx(idx);
+    setStep('config');
+  };
 
   const toggleExercise = (item) => {
     setR(prev => {
@@ -84,10 +120,16 @@ function Editor({ routine, onClose }) {
     onClose();
   };
 
-  const groupExercises = useMemo(() => filterExercises('', activeGroup), [activeGroup]);
+  const groupExercises = useMemo(
+    () => filterExercises(query, activeGroup, data.customExercises || []),
+    [query, activeGroup, data.customExercises],
+  );
+  const isEditing = data.routines.some(x => x.id === routine.id);
   const totalEstSec = r.exercises.reduce((acc, ex) => {
-    const sets = ex.mode === 'manual' ? ex.sets : r.defaults.sets;
-    return acc + sets * r.defaults.restSec;
+    const manual = ex.mode === 'manual';
+    const sets = manual ? (Number(ex.sets) || r.defaults.sets) : r.defaults.sets;
+    const rest = manual ? (Number(ex.restSec) || r.defaults.restSec) : r.defaults.restSec;
+    return acc + sets * rest;
   }, 0);
   const estMin = Math.max(1, Math.round(totalEstSec / 60));
 
@@ -102,7 +144,7 @@ function Editor({ routine, onClose }) {
             <Card style={{ marginBottom: 16 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <View style={{ flex: 1, marginRight: 12 }}>
-                  <H style={{ fontSize: 20, fontWeight: '700' }}>Nueva rutina</H>
+                  <H style={{ fontSize: 20, fontWeight: '700' }}>{isEditing ? 'Editar rutina' : 'Nueva rutina'}</H>
                   <T mute style={{ fontSize: 14, marginTop: 2 }}>Paso 1 de 2 · Datos</T>
                 </View>
                 {/* Dots */}
@@ -266,8 +308,25 @@ function Editor({ routine, onClose }) {
                 </View>
               </Card>
 
+              {/* Search */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.card2, borderRadius: 14, paddingHorizontal: 12, marginTop: 12, borderWidth: 1, borderColor: C.line }}>
+                <Ionicons name="search" size={18} color={C.mute} />
+                <Field
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Buscar ejercicio"
+                  returnKeyType="search"
+                  style={{ flex: 1, backgroundColor: 'transparent', paddingHorizontal: 8, paddingVertical: 12 }}
+                />
+                {query ? (
+                  <Press onPress={() => setQuery('')} style={{ padding: 4 }}>
+                    <Ionicons name="close-circle" size={18} color={C.mute} />
+                  </Press>
+                ) : null}
+              </View>
+
               {/* Muscle Group Horizontal Chips */}
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 12 }} contentContainerStyle={{ gap: 8 }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }} contentContainerStyle={{ gap: 8 }}>
                 {GROUPS.map(g => {
                   const on = activeGroup === g;
                   return (
@@ -275,7 +334,7 @@ function Editor({ routine, onClose }) {
                       key={g}
                       onPress={() => setActiveGroup(g)}
                       style={{
-                        height: 44, borderRadius: 16, paddingHorizontal: 16,
+                        height: 40, borderRadius: 14, paddingHorizontal: 16,
                         backgroundColor: on ? C.accent : C.card2,
                         borderWidth: 1, borderColor: on ? C.accent : C.line,
                         alignItems: 'center', justifyContent: 'center',
@@ -286,6 +345,15 @@ function Editor({ routine, onClose }) {
                   );
                 })}
               </ScrollView>
+
+              {/* Create custom exercise */}
+              <Press
+                onPress={() => setCustomModal(true)}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10, paddingVertical: 12, borderRadius: 14, backgroundColor: C.accentDim, borderWidth: 1, borderColor: C.accent }}
+              >
+                <Ionicons name="add-circle" size={20} color={C.accent} />
+                <T style={{ fontSize: 14, fontWeight: '700', color: C.accent }}>Crear ejercicio personalizado</T>
+              </Press>
             </View>
 
             {/* Section label */}
@@ -302,6 +370,7 @@ function Editor({ routine, onClose }) {
                 const exObj = r.exercises.find(e => e.id === item.id);
                 const sCount = sel && exObj ? (exObj.mode === 'manual' ? exObj.sets : r.defaults.sets) : r.defaults.sets;
                 const rCount = sel && exObj ? (exObj.mode === 'manual' ? (exObj.reps || r.defaults.reps) : r.defaults.reps) : r.defaults.reps;
+                const restCount = sel && exObj && exObj.mode === 'manual' ? (exObj.restSec || r.defaults.restSec) : r.defaults.restSec;
 
                 return (
                   <Press
@@ -314,7 +383,7 @@ function Editor({ routine, onClose }) {
                           setStep('config');
                         }
                       } else {
-                        toggleExercise(item);
+                        addAndOpen(item);
                       }
                     }}
                     style={{
@@ -324,11 +393,21 @@ function Editor({ routine, onClose }) {
                     }}
                   >
                     <View style={{ flex: 1, marginRight: 12 }}>
-                      <T style={{ fontSize: 16, fontWeight: '700' }}>{item.name}</T>
-                      <T mute style={{ fontSize: 13, marginTop: 3 }}>{item.equipment} · {sCount} × {rCount}</T>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <T numberOfLines={1} style={{ fontSize: 16, fontWeight: '700', flexShrink: 1 }}>{item.name}</T>
+                        {item.custom && (
+                          <View style={{ paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6, backgroundColor: C.accentDim }}>
+                            <T style={{ fontSize: 9, fontWeight: '700', color: C.accent }}>PROPIO</T>
+                          </View>
+                        )}
+                      </View>
+                      <T mute style={{ fontSize: 13, marginTop: 3 }}>{item.equipment} · {sCount} × {rCount} · {formatRest(restCount)}</T>
                     </View>
                     <Press
-                      onPress={() => toggleExercise(item)}
+                      onPress={() => {
+                        if (sel) toggleExercise(item);
+                        else addAndOpen(item);
+                      }}
                       style={{
                         width: 44, height: 44, borderRadius: 14,
                         backgroundColor: sel ? C.accent : C.card2,
@@ -350,7 +429,9 @@ function Editor({ routine, onClose }) {
             {/* Bottom Fixed Block */}
             <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: C.bg, padding: 22, borderTopWidth: 1, borderColor: C.line }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <T style={{ fontSize: 15, fontWeight: '700' }}>{r.exercises.length} ejercicios</T>
+                <T style={{ fontSize: 15, fontWeight: '700' }}>
+                  {r.exercises.length} {r.exercises.length === 1 ? 'ejercicio' : 'ejercicios'}
+                </T>
                 <T mute style={{ fontSize: 13 }}>~{estMin} min</T>
               </View>
               <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -362,7 +443,8 @@ function Editor({ routine, onClose }) {
                   <T style={{ fontSize: 20, fontWeight: '700' }}>←</T>
                 </Press>
                 <Btn
-                  label="Guardar rutina"
+                  disabled={r.exercises.length === 0}
+                  label={r.exercises.length === 0 ? 'Añade al menos 1 ejercicio' : 'Guardar rutina'}
                   onPress={saveRoutine}
                   style={{ flex: 1, minHeight: 56, borderRadius: 24 }}
                 />
@@ -376,7 +458,15 @@ function Editor({ routine, onClose }) {
           const ex = r.exercises[configIdx];
           const isManual = ex.mode === 'manual';
           const setsVal = isManual ? ex.sets : r.defaults.sets;
-          const rirVal = isManual ? ex.rir : 2;
+          const repsVal = isManual ? (ex.reps || r.defaults.reps) : r.defaults.reps;
+          const restVal = isManual ? (ex.restSec || r.defaults.restSec) : r.defaults.restSec;
+          const rirVal = isManual ? (ex.rir !== undefined ? ex.rir : 2) : 2;
+
+          const patchEx = (patch) => setR(prev => {
+            const exes = [...prev.exercises];
+            exes[configIdx] = { ...exes[configIdx], ...patch };
+            return { ...prev, exercises: exes };
+          });
 
           const getEffortLabel = (rir) => {
             if (rir === 0) return 'Al fallo';
@@ -392,7 +482,7 @@ function Editor({ routine, onClose }) {
               <Card style={{ marginBottom: 16 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <View style={{ flex: 1, marginRight: 12 }}>
-                    <H style={{ fontSize: 20, fontWeight: '700' }}>Configurar ejercicio</H>
+                    <H style={{ fontSize: 20, fontWeight: '700' }}>Ajustes del ejercicio</H>
                     <T mute numberOfLines={1} style={{ fontSize: 14, marginTop: 2 }}>{ex.name}</T>
                   </View>
                   <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', marginTop: 4 }}>
@@ -405,13 +495,7 @@ function Editor({ routine, onClose }) {
               {/* Mode Selector */}
               <View style={{ backgroundColor: C.card, borderWidth: 1, borderColor: C.line, borderRadius: 18, padding: 4, flexDirection: 'row', marginBottom: 8 }}>
                 <Press
-                  onPress={() => {
-                    setR(prev => {
-                      const exes = [...prev.exercises];
-                      exes[configIdx] = { ...exes[configIdx], mode: 'default' };
-                      return { ...prev, exercises: exes };
-                    });
-                  }}
+                  onPress={() => patchEx({ mode: 'default' })}
                   style={{
                     flex: 1, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
                     backgroundColor: !isManual ? C.accent : 'transparent',
@@ -420,132 +504,93 @@ function Editor({ routine, onClose }) {
                   <T style={{ fontSize: 14, fontWeight: '600', color: !isManual ? C.accentText : C.text }}>Por defecto</T>
                 </Press>
                 <Press
-                  onPress={() => {
-                    setR(prev => {
-                      const exes = [...prev.exercises];
-                      exes[configIdx] = { ...exes[configIdx], mode: 'manual', sets: ex.sets || prev.defaults.sets, rir: ex.rir !== undefined ? ex.rir : 2 };
-                      return { ...prev, exercises: exes };
-                    });
-                  }}
+                  onPress={() => patchEx({ mode: 'manual', sets: setsVal, reps: repsVal, restSec: restVal, rir: rirVal })}
                   style={{
                     flex: 1, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
                     backgroundColor: isManual ? C.accent : 'transparent',
                   }}
                 >
-                  <T style={{ fontSize: 14, fontWeight: '600', color: isManual ? C.accentText : C.text }}>Manual</T>
+                  <T style={{ fontSize: 14, fontWeight: '600', color: isManual ? C.accentText : C.text }}>Personalizado</T>
                 </Press>
               </View>
 
               <T mute style={{ fontSize: 13, marginHorizontal: 4, marginBottom: 16 }}>
-                {!isManual ? 'Se usan las series y el RIR por defecto de la rutina.' : 'Ajusta las series y el RIR solo para este ejercicio.'}
+                {!isManual
+                  ? `Usa los valores de la rutina: ${r.defaults.sets} series × ${r.defaults.reps} reps · ${formatRest(r.defaults.restSec)} · RIR 2. Toca "Personalizado" para cambiarlos solo en este ejercicio.`
+                  : 'Ajusta series, repeticiones, descanso y RIR solo para este ejercicio.'}
               </T>
 
-              {/* Series Card */}
-              <Card style={{ marginBottom: 16, opacity: isManual ? 1 : 0.38 }}>
-                <T style={{ fontSize: 16, fontWeight: '700' }}>Series</T>
-                <T mute style={{ fontSize: 13, marginTop: 2, marginBottom: 16 }}>Cuántas series harás de este ejercicio</T>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Press
-                    disabled={!isManual}
-                    onPress={() => {
-                      if (!isManual) return;
-                      setR(prev => {
-                        const exes = [...prev.exercises];
-                        const cur = exes[configIdx].sets;
-                        if (cur > 1) exes[configIdx] = { ...exes[configIdx], sets: cur - 1 };
-                        return { ...prev, exercises: exes };
-                      });
-                    }}
-                    style={{ width: 56, height: 56, borderRadius: 16, backgroundColor: C.card2, alignItems: 'center', justifyContent: 'center' }}
-                    accessibilityLabel="Disminuir series"
-                  >
-                    <T style={{ fontSize: 24, fontWeight: '700' }}>−</T>
-                  </Press>
-                  <T style={{ fontSize: 40, fontWeight: '800' }}>{String(setsVal).padStart(2, '0')}</T>
-                  <Press
-                    disabled={!isManual}
-                    onPress={() => {
-                      if (!isManual) return;
-                      setR(prev => {
-                        const exes = [...prev.exercises];
-                        const cur = exes[configIdx].sets;
-                        if (cur < 10) exes[configIdx] = { ...exes[configIdx], sets: cur + 1 };
-                        return { ...prev, exercises: exes };
-                      });
-                    }}
-                    style={{ width: 56, height: 56, borderRadius: 16, backgroundColor: C.card2, alignItems: 'center', justifyContent: 'center' }}
-                    accessibilityLabel="Aumentar series"
-                  >
-                    <T style={{ fontSize: 24, fontWeight: '700' }}>+</T>
-                  </Press>
+              {/* Series */}
+              <Card style={{ marginBottom: 12, opacity: isManual ? 1 : 0.5 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+                  <T style={{ fontSize: 16, fontWeight: '700' }}>Series</T>
+                  <T mute style={{ fontSize: 12 }}>1 a 10</T>
                 </View>
+                <Stepper
+                  value={Number(setsVal) || 3}
+                  min={1}
+                  max={10}
+                  disabled={!isManual}
+                  onChange={(v) => patchEx({ sets: v })}
+                />
               </Card>
 
-              {/* RIR Card */}
-              <Card style={{ marginBottom: 16, opacity: isManual ? 1 : 0.38 }}>
-                <T style={{ fontSize: 16, fontWeight: '700' }}>RIR</T>
-                <T mute style={{ fontSize: 13, marginTop: 2, marginBottom: 16 }}>Repeticiones que te dejas en reserva</T>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Press
-                    disabled={!isManual}
-                    onPress={() => {
-                      if (!isManual) return;
-                      setR(prev => {
-                        const exes = [...prev.exercises];
-                        const cur = exes[configIdx].rir;
-                        if (cur > 0) exes[configIdx] = { ...exes[configIdx], rir: cur - 1 };
-                        return { ...prev, exercises: exes };
-                      });
-                    }}
-                    style={{ width: 56, height: 56, borderRadius: 16, backgroundColor: C.card2, alignItems: 'center', justifyContent: 'center' }}
-                    accessibilityLabel="Disminuir RIR"
-                  >
-                    <T style={{ fontSize: 24, fontWeight: '700' }}>−</T>
-                  </Press>
-                  <T style={{ fontSize: 40, fontWeight: '800' }}>{String(rirVal).padStart(2, '0')}</T>
-                  <Press
-                    disabled={!isManual}
-                    onPress={() => {
-                      if (!isManual) return;
-                      setR(prev => {
-                        const exes = [...prev.exercises];
-                        const cur = exes[configIdx].rir;
-                        if (cur < 4) exes[configIdx] = { ...exes[configIdx], rir: cur + 1 };
-                        return { ...prev, exercises: exes };
-                      });
-                    }}
-                    style={{ width: 56, height: 56, borderRadius: 16, backgroundColor: C.card2, alignItems: 'center', justifyContent: 'center' }}
-                    accessibilityLabel="Aumentar RIR"
-                  >
-                    <T style={{ fontSize: 24, fontWeight: '700' }}>+</T>
-                  </Press>
+              {/* Repeticiones */}
+              <Card style={{ marginBottom: 12, opacity: isManual ? 1 : 0.5 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+                  <T style={{ fontSize: 16, fontWeight: '700' }}>Repeticiones</T>
+                  <T mute style={{ fontSize: 12 }}>objetivo por serie</T>
                 </View>
+                <Stepper
+                  value={Number(repsVal) || 10}
+                  min={1}
+                  max={50}
+                  disabled={!isManual}
+                  onChange={(v) => patchEx({ reps: v })}
+                />
               </Card>
 
-              {/* Effort Card */}
-              <Card style={{ marginBottom: 24, opacity: isManual ? 1 : 0.38 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <T style={{ fontSize: 15, fontWeight: '700' }}>{getEffortLabel(rirVal)}</T>
-                  <T mute style={{ fontSize: 13 }}>RIR {String(rirVal).padStart(2, '0')}</T>
+              {/* Descanso */}
+              <Card style={{ marginBottom: 12, opacity: isManual ? 1 : 0.5 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+                  <T style={{ fontSize: 16, fontWeight: '700' }}>Descanso</T>
+                  <T mute style={{ fontSize: 12 }}>entre series</T>
                 </View>
-                {/* 5 segments: order left to right: RIR 4+, 3, 2, 1, 0 */}
-                <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}>
-                  {[4, 3, 2, 1, 0].map(val => {
-                    const active = rirVal === val;
-                    return (
-                      <View
-                        key={val}
-                        style={{
-                          flex: 1, height: 8, borderRadius: 4,
-                          backgroundColor: active ? C.accent : C.track,
-                        }}
-                      />
-                    );
-                  })}
+                <Stepper
+                  value={Number(restVal) || 120}
+                  min={15}
+                  max={600}
+                  disabled={!isManual}
+                  display={formatRest}
+                  onChange={(v) => patchEx({ restSec: Math.max(15, Math.round(v / 15) * 15) })}
+                />
+                <T mute style={{ fontSize: 12, marginTop: 8 }}>Pasos de 15 s. El cronómetro del entreno usará este tiempo.</T>
+              </Card>
+
+              {/* RIR */}
+              <Card style={{ marginBottom: 24, opacity: isManual ? 1 : 0.5 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+                  <T style={{ fontSize: 16, fontWeight: '700' }}>RIR</T>
+                  <T mute style={{ fontSize: 12 }}>{getEffortLabel(rirVal)}</T>
                 </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <T mute style={{ fontSize: 12 }}>Lejos</T>
-                  <T mute style={{ fontSize: 12 }}>Al fallo</T>
+                <Stepper
+                  value={Number(rirVal) || 0}
+                  min={0}
+                  max={4}
+                  disabled={!isManual}
+                  onChange={(v) => patchEx({ rir: v })}
+                />
+                <View style={{ flexDirection: 'row', gap: 6, marginTop: 12 }}>
+                  {[4, 3, 2, 1, 0].map(val => (
+                    <View
+                      key={val}
+                      style={{ flex: 1, height: 8, borderRadius: 4, backgroundColor: rirVal === val ? C.accent : C.track }}
+                    />
+                  ))}
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
+                  <T mute style={{ fontSize: 11 }}>Lejos del fallo</T>
+                  <T mute style={{ fontSize: 11 }}>Al fallo</T>
                 </View>
               </Card>
 
@@ -559,7 +604,7 @@ function Editor({ routine, onClose }) {
                   <T style={{ fontSize: 20, fontWeight: '700' }}>←</T>
                 </Press>
                 <Btn
-                  label="Añadir a la rutina"
+                  label="Listo"
                   onPress={() => {
                     setConfigIdx(null);
                     setStep('ejercicios');
@@ -570,6 +615,32 @@ function Editor({ routine, onClose }) {
             </ScrollView>
           );
         })()}
+
+        <CustomExerciseModal
+          visible={customModal}
+          onClose={() => setCustomModal(false)}
+          onCreated={(newEx) => {
+            const idx = r.exercises.length;
+            setR(prev => ({
+              ...prev,
+              exercises: [
+                ...prev.exercises,
+                {
+                  id: newEx.id,
+                  name: newEx.name,
+                  group: newEx.group,
+                  equipment: newEx.equipment,
+                  sets: prev.defaults.sets,
+                  reps: prev.defaults.reps,
+                  mode: 'default',
+                  rir: 2,
+                },
+              ],
+            }));
+            setConfigIdx(idx);
+            setStep('config');
+          }}
+        />
 
       </KeyboardAvoidingView>
     </Modal>
@@ -617,13 +688,15 @@ export default function Routines({ start }) {
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 4, marginBottom: 16 }}>
           {DAYS.map((dName, idx) => {
             const hasRoutines = routinesForDay(data, idx).length > 0;
+            const isToday = idx === TODAY_IDX;
             return (
               <View
                 key={dName}
                 style={{
                   flex: 1, height: 44, borderRadius: 14,
                   backgroundColor: hasRoutines ? C.accent : C.card2,
-                  borderWidth: 1, borderColor: hasRoutines ? C.accent : C.line,
+                  borderWidth: isToday ? 2 : 1,
+                  borderColor: isToday ? C.text : (hasRoutines ? C.accent : C.line),
                   alignItems: 'center', justifyContent: 'center',
                 }}
               >
@@ -644,7 +717,12 @@ export default function Routines({ start }) {
             const dayRouts = routinesForDay(data, dIdx);
             if (dayRouts.length > 0) {
               return dayRouts.map((r) => {
-                const estSec = r.exercises.reduce((acc, ex) => acc + (Number(ex.sets) || r.defaults?.sets || 3) * (r.defaults?.restSec || 120), 0);
+                const estSec = r.exercises.reduce((acc, ex) => {
+                  const manual = ex.mode === 'manual';
+                  const sets = manual ? (Number(ex.sets) || r.defaults?.sets || 3) : (r.defaults?.sets || 3);
+                  const rest = manual ? (Number(ex.restSec) || r.defaults?.restSec || 120) : (r.defaults?.restSec || 120);
+                  return acc + sets * rest;
+                }, 0);
                 const estMin = Math.max(1, Math.round(estSec / 60));
 
                 return (
@@ -654,13 +732,18 @@ export default function Routines({ start }) {
                       style={{ flexDirection: 'row', alignItems: 'center' }}
                     >
                       {/* Day Abbr Box */}
-                      <View style={{ width: 52, height: 44, borderRadius: 14, backgroundColor: C.accentDim, alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
-                        <T style={{ fontSize: 13, fontWeight: '800', color: C.accent }}>{DAY_ABBR[dIdx]}</T>
+                      <View style={{ width: 52, height: 44, borderRadius: 14, backgroundColor: dIdx === TODAY_IDX ? C.accent : C.accentDim, alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
+                        <T style={{ fontSize: 13, fontWeight: '800', color: dIdx === TODAY_IDX ? C.accentText : C.accent }}>{DAY_ABBR[dIdx]}</T>
                       </View>
                       {/* Center Info */}
                       <View style={{ flex: 1, marginRight: 10 }}>
-                        <T style={{ fontSize: 16, fontWeight: '700' }}>{r.name}</T>
-                        <T mute style={{ fontSize: 13, marginTop: 2 }}>{r.exercises.length} ejercicios · ~{estMin} min</T>
+                        <T numberOfLines={1} style={{ fontSize: 16, fontWeight: '700' }}>{r.name}</T>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3, gap: 8 }}>
+                          <T mute style={{ fontSize: 13 }}>{r.exercises.length} ejercicios · ~{estMin} min</T>
+                          <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 7, backgroundColor: C.card2, borderWidth: 1, borderColor: C.line }}>
+                            <T mute style={{ fontSize: 10, fontWeight: '600' }}>{goalLabel(r.goal)}</T>
+                          </View>
+                        </View>
                       </View>
                       {/* Right Chevron & delete */}
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>

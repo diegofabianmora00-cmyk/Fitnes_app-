@@ -170,30 +170,66 @@ export default function SessionReview({ visible, review, records = [], workout =
 
             {review && (
               <Card style={{ marginTop: 18 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+                {review.score === null ? (
                   <View>
-                    <T mute style={{ fontSize: 11, letterSpacing: 1 }}>PUNTAJE DE SESIÓN</T>
-                    <T style={{ fontSize: 46, fontWeight: '800', color: C.accent, lineHeight: 52 }}>{review.score}</T>
+                    <T style={{ fontSize: 20, fontWeight: '800', color: C.text }}>{review.grade}</T>
+                    <T mute style={{ fontSize: 14, lineHeight: 20, marginTop: 8 }}>{review.supportMessage}</T>
                   </View>
-                  <T style={{ fontSize: 16, fontWeight: '700', color: review.score >= 75 ? C.accent : review.score >= 60 ? C.warn : C.danger }}>{review.grade}</T>
-                </View>
-                <View style={{ marginTop: 10 }}>
-                  {(review.components || []).map((c) => {
-                    const pct = Math.round(c.value * 100);
-                    const color = c.value >= 0.8 ? C.accent : c.value >= 0.5 ? C.warn : C.danger;
-                    return (
-                      <View key={c.key} style={{ marginTop: 10 }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                          <T mute style={{ fontSize: 13 }}>{c.label}</T>
-                          <T style={{ fontSize: 13, fontWeight: '700' }}>{pct}%</T>
-                        </View>
-                        <View style={{ height: 8, borderRadius: 4, backgroundColor: C.card2, marginTop: 5 }}>
-                          <View style={{ height: 8, borderRadius: 4, width: `${pct}%`, backgroundColor: color }} />
-                        </View>
+                ) : (
+                  <>
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+                      <View>
+                        <T mute style={{ fontSize: 11, letterSpacing: 1 }}>PUNTAJE DE SESIÓN</T>
+                        <T style={{ fontSize: 46, fontWeight: '800', color: C.accent, lineHeight: 52 }}>{review.score}</T>
                       </View>
-                    );
-                  })}
-                </View>
+                      <T style={{ fontSize: 16, fontWeight: '700', color: review.score >= 75 ? C.accent : review.score >= 60 ? C.warn : C.text }}>{review.grade}</T>
+                    </View>
+                    {(() => {
+                      const planComp = (review.components || []).find((c) => c.key === 'plan');
+                      const planPct = planComp ? Math.round(planComp.value * 100) : null;
+                      return planPct !== null ? (
+                        <T style={{ fontSize: 14, fontWeight: '600', color: C.accent, marginTop: 8 }}>
+                          Completaste el {planPct}% de tu plan.
+                        </T>
+                      ) : null;
+                    })()}
+                    <View style={{ marginTop: 10 }}>
+                      {(review.components || []).map((c) => {
+                        const pct = Math.round(c.value * 100);
+                        const color = c.value >= 0.8 ? C.accent : c.value >= 0.5 ? C.warn : C.mute;
+                        return (
+                          <View key={c.key} style={{ marginTop: 10 }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                              <T mute style={{ fontSize: 13 }}>{c.label}</T>
+                              <T style={{ fontSize: 13, fontWeight: '700' }}>{pct}%</T>
+                            </View>
+                            <View style={{ height: 8, borderRadius: 4, backgroundColor: C.card2, marginTop: 5 }}>
+                              <View style={{ height: 8, borderRadius: 4, width: `${pct}%`, backgroundColor: color }} />
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                    {!!review.adjusted && (
+                      <T mute style={{ fontSize: 12, lineHeight: 17, marginTop: 12 }}>
+                        Sesión ajustada a propósito ({review.adjusted.reason}): se adaptó la evaluación para no penalizar el descanso o carga.
+                      </T>
+                    )}
+                    {!!(review.missed && review.missed.length) && (
+                      <T mute style={{ fontSize: 12, lineHeight: 17, marginTop: 12 }}>
+                        Faltaron del plan: {review.missed.map((m) => m.name).join(', ')}.
+                      </T>
+                    )}
+                    {!!review.partial && (
+                      <T mute style={{ fontSize: 11, lineHeight: 16, marginTop: 8 }}>
+                        Sesión antigua: el puntaje se recalculó con los datos disponibles.
+                      </T>
+                    )}
+                    <T mute style={{ fontSize: 11, fontStyle: 'italic', lineHeight: 16, marginTop: 12 }}>
+                      Este puntaje mide qué tanto seguiste tu plan, no tu salud ni tu valor. Escucha a tu cuerpo.
+                    </T>
+                  </>
+                )}
                 <Press onPress={() => setShowScore((v) => !v)} style={{ marginTop: 14, alignSelf: 'flex-start' }}>
                   <T style={{ fontSize: 12, color: C.accent, fontWeight: '600' }}>¿Cómo se calcula?</T>
                 </Press>

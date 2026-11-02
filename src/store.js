@@ -13,7 +13,8 @@ const CORRUPT_KEY = KEYS.corrupt;
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { exerciseById } from './exercises';
+import { exerciseById, registerCustomExercises } from './exercises';
+import { rescoreWorkouts } from './recommend';
 
 export const uid = () => Math.random().toString(36).slice(2, 9);
 export const KG = 2.20462;
@@ -46,10 +47,11 @@ export const PROFILE_DEFAULT = {
 const LEGACY = { e1: 'press-banca', e2: 'press-militar', e3: 'fondos' };
 
 const seed = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   unit: 'kg',
   profile: { ...PROFILE_DEFAULT },
   coachMemory: [],
+  customExercises: [],
   routines: [{
     id: 'r1',
     name: 'Empuje',
@@ -123,13 +125,25 @@ export const migrate = (raw) => {
     coachMemory: Array.isArray(raw.coachMemory) ? raw.coachMemory : (Array.isArray(raw.profile?.coachMemory) ? raw.profile.coachMemory : []),
   };
   const routines = (base.routines || []).map(normalizeRoutine);
+  const customExercises = (Array.isArray(base.customExercises) ? base.customExercises : [])
+    .filter((e) => e && e.id && e.name)
+    .map((e) => ({
+      ...e,
+      group: e.group || 'Otro',
+      equipment: e.equipment || 'Otro',
+      type: e.type || 'aislamiento',
+      muscles: Array.isArray(e.muscles) ? e.muscles : (e.muscles ? [String(e.muscles)] : []),
+      met: Number(e.met) || 3.5,
+      metCode: e.metCode || '02054',
+      custom: true,
+    }));
   const workouts = (base.workouts || [])
     .map((w) => ({
       ...w,
       exercises: (w.exercises || []).map(normalizeWorkoutExercise),
     }))
     .sort((a, b) => (b.date || 0) - (a.date || 0));
-  return { ...base, schemaVersion: 2, routines, workouts };
+  return rescoreWorkouts({ ...base, schemaVersion: 4, routines, customExercises, workouts });
 };
 
 const Ctx = createContext();
@@ -142,6 +156,9 @@ export function StoreProvider({ children }) {
   const ref = useRef(seed);
   const [data, setData] = useState(seed);
   const [ready, setReady] = useState(false);
+  useEffect(() => {
+    registerCustomExercises(data.customExercises);
+  }, [data.customExercises]);
   useEffect(() => {
     let alive = true;
     const apply = (merged) => {
@@ -209,14 +226,15 @@ export function StoreProvider({ children }) {
         }
         apply(merged);
         saveCopy(merged);
-        if (raw.schemaVersion !== 2) AsyncStorage.setItem(KEY, JSON.stringify(merged)).catch(() => {});
+        const staleScores = (raw.workouts || []).some((w) => !w.score || Number(w.score.v) !== 4);
+        if (raw.schemaVersion !== 4 || staleScores) AsyncStorage.setItem(KEY, JSON.stringify(merged)).catch(() => {});
       })
       .catch(() => {}).finally(() => { if (alive) setReady(true); });
     return () => { alive = false; };
   }, []);
   const update = (fn) => {
     const n = fn(ref.current);
-    const next = { ...n, schemaVersion: 2 };
+    const next = { ...n, schemaVersion: 4 };
     ref.current = next;
     setData(next);
     const text = JSON.stringify(next);

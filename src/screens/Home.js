@@ -107,7 +107,12 @@ export default function Home({ go, start, isActive }) {
             <T mute>Tu rutina de hoy</T>
             <T style={{ fontSize: 22, fontWeight: '700', marginTop: 2 }}>{todaysRoutine.name}</T>
             <T mute style={{ marginTop: 4 }}>
-              {todaysRoutine.exercises.length} ejercicios · ~{Math.max(1, Math.round(todaysRoutine.exercises.reduce((acc, ex) => acc + (Number(ex.sets) || todaysRoutine.defaults?.sets || 3) * (todaysRoutine.defaults?.restSec || 120), 0) / 60))} min
+              {todaysRoutine.exercises.length} ejercicios · ~{Math.max(1, Math.round(todaysRoutine.exercises.reduce((acc, ex) => {
+                const manual = ex.mode === 'manual';
+                const sets = manual ? (Number(ex.sets) || todaysRoutine.defaults?.sets || 3) : (todaysRoutine.defaults?.sets || 3);
+                const rest = manual ? (Number(ex.restSec) || todaysRoutine.defaults?.restSec || 120) : (todaysRoutine.defaults?.restSec || 120);
+                return acc + sets * rest;
+              }, 0) / 60))} min
             </T>
             <Btn label="Empezar entrenamiento" onPress={() => start(todaysRoutine)} style={{ marginTop: 16, minHeight: 56, borderRadius: 24 }} />
           </Card>

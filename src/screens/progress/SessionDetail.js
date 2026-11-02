@@ -7,7 +7,7 @@ import { C } from '../../theme';
 import { Card, Press, T, Btn } from '../../ui';
 import { toU, useStore } from '../../store';
 import Coach from '../../Coach';
-import { sessionProgress } from '../../recommend';
+import { sessionProgress, sessionReview } from '../../recommend';
 
 const fmtDateFull = (ms) => {
   if (!ms) return '—';
@@ -24,19 +24,9 @@ export default function SessionDetail({ visible, workout, onClose, initialFocusC
 
   if (!workout) return null;
 
-  const scoreVal = workout.score?.score || 0;
-  const components = workout.score?.components || [
-    { key: 'load', label: 'Peso recomendado', value: 1, weight: 30 },
-    { key: 'reps', label: 'Repeticiones objetivo', value: 1, weight: 50 },
-    { key: 'rest', label: 'Tiempo ideal de la serie', value: 1, weight: 20 },
-  ];
-
-  // Map component labels as requested: "Peso recomendado", "Repeticiones objetivo", "Tiempo ideal de la serie"
-  const compLabels = {
-    load: 'Peso recomendado',
-    reps: 'Repeticiones objetivo',
-    rest: 'Tiempo ideal de la serie',
-  };
+  const review = workout.score && Number(workout.score.v) === 3 ? workout.score : sessionReview(data, workout);
+  const scoreVal = review.score || 0;
+  const components = review.components || [];
 
   const progressDiff = sessionProgress(data, workout);
   const coachText = progressDiff !== null
@@ -97,17 +87,19 @@ export default function SessionDetail({ visible, workout, onClose, initialFocusC
                 <View style={{ position: 'absolute', alignItems: 'center' }}>
                   <T style={{ fontSize: 56, fontWeight: '800', color: C.accent, lineHeight: 62 }}>{scoreVal}</T>
                   <T mute style={{ fontSize: 15 }}>de 100</T>
+                  <T style={{ fontSize: 14, fontWeight: '700', color: scoreVal >= 75 ? C.accent : scoreVal >= 60 ? C.warn : C.danger, marginTop: 2 }}>{review.grade}</T>
                 </View>
               </View>
             </Card>
 
             {/* Compliance card */}
             <Card style={{ padding: 18, marginTop: 12 }}>
-              <T style={{ fontWeight: '700', fontSize: 16, marginBottom: 14 }}>Cuánto cumpliste de tu objetivo</T>
+              <T style={{ fontWeight: '700', fontSize: 16, marginBottom: 14 }}>Cómo se compone tu puntaje</T>
               <View style={{ gap: 14 }}>
                 {components.map((c) => {
                   const pct = Math.round(c.value * 100);
-                  const label = compLabels[c.key] || c.label;
+                  const label = c.label;
+                  const color = c.value >= 0.8 ? C.accent : c.value >= 0.5 ? C.warn : C.danger;
                   return (
                     <View key={c.key}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -115,12 +107,22 @@ export default function SessionDetail({ visible, workout, onClose, initialFocusC
                         <T style={{ fontSize: 14, fontWeight: '700' }}>{pct}%</T>
                       </View>
                       <View style={{ height: 8, borderRadius: 4, backgroundColor: C.segmentOff }}>
-                        <View style={{ height: 8, borderRadius: 4, width: `${pct}%`, backgroundColor: C.accent }} />
+                        <View style={{ height: 8, borderRadius: 4, width: `${pct}%`, backgroundColor: color }} />
                       </View>
                     </View>
                   );
                 })}
               </View>
+              {!!(review.missed && review.missed.length) && (
+                <T mute style={{ fontSize: 12, lineHeight: 17, marginTop: 12 }}>
+                  Faltaron del plan: {review.missed.map((m) => m.name).join(', ')}.
+                </T>
+              )}
+              {!!review.partial && (
+                <T mute style={{ fontSize: 11, lineHeight: 16, marginTop: 8 }}>
+                  Sesión antigua: el puntaje se recalculó con los datos disponibles.
+                </T>
+              )}
             </Card>
 
             {/* Coach message */}

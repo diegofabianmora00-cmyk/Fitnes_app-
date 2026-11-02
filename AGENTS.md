@@ -16,16 +16,18 @@ no los crees ni los edites.
 - src/theme.js: colores (objeto C).
 - src/ui.js: Press, FadeIn, Card, T (texto), H (título), Btn, Field (input).
 - src/store.js: StoreProvider y useStore() → { data, update, ready }. Helpers: uid, KG,
-  toU(kg,u), fromU(v,u), lastSets(data,exId) y migrate() (normaliza datos viejos y la
-  rutina inicial e1/e2/e3).
+  toU(kg,u), fromU(v,u), lastSets(data,exId) y migrate() (normaliza datos viejos, la
+  rutina inicial e1/e2/e3 y recalcula puntajes viejos a v3).
 - src/recommend.js: motor puro (sin React). recommendFor, RULES/SOURCES, repRangeFor,
   restFor, frequencyAdvice, restFeedback, personalRecords, newRecords, sessionReview,
-  weekSummary y coachMessage.
+  exerciseReview, rescoreWorkouts, routineScores, weekSummary y coachMessage.
 - src/Coach.js: Atlas animado. COACH (apariencia) y Coach({ mood, size }):
   mood neutral | happy | alert; size 'sm' | 'lg'.
-- src/exercises.js: COMPENDIUM, METS, exercises (43), GROUPS, exerciseById,
-  filterExercises, kcalPerHour.
+- src/exercises.js: COMPENDIUM, METS, exercises (79), GROUPS, exerciseById,
+  filterExercises, registerCustomExercises, kcalPerHour.
 - src/ExercisePicker.js: selector con buscador (props: visible, onClose, onSelect, selectedId).
+- src/CustomExerciseModal.js: modal para crear un ejercicio propio (nombre, grupo y
+  equipo obligatorios; tipo y músculos opcionales). Guarda en data.customExercises.
 - src/RuleInfo.js: modal que explica reglas y fuentes.
 - src/SessionReview.js: celebración de PR y resumen/puntaje de sesión.
 - src/screens/Home.js: mensaje de Atlas, reglas, siguiente rutina, semana.
@@ -35,11 +37,12 @@ no los crees ni los edites.
 - src/screens/Workout.js: overlay con Iniciar/Terminar serie, descanso real, RIR,
   guardado de la sesión, PR y resumen.
 - src/screens/Progress.js: estadísticas, gráfica de área SVG con filtros de métrica y ejercicio, racha, aviso de estancamiento, récords, músculos trabajados e historial paginado.
-- src/screens/progress/StreakCard.js, PeriodPicker.js, ProgressChart.js, StatGrid.js, CoachCard.js, PrCard.js, MuscleCard.js, HistoryList.js, SessionDetail.js, EmptyProgress.js: componentes modulares de la interfaz de Progreso.
+- src/screens/progress/StreakCard.js, PeriodPicker.js, ProgressChart.js, StatGrid.js, CoachCard.js, PrCard.js, MuscleCard.js, RoutineScoresCard.js, HistoryList.js, SessionDetail.js, EmptyProgress.js: componentes modulares de la interfaz de Progreso.
 - src/Settings.js: kg/lb, editar perfil, exportar, borrar datos.
 - src/coachMemory.js: cerebro de los mensajes de Atlas (lógica pura y plantillas).
 - jest.config.js: preset 'jest-expo' para pruebas.
 - src/__tests__/recommend.test.js: pruebas unitarias del motor puro (jest).
+- src/__tests__/scoring.test.js: pruebas del puntaje de sesión v3, recalculo y puntaje por rutina (jest).
 - src/__tests__/coachMemory.test.js: pruebas unitarias del cerebro de mensajes de Atlas (jest).
 - docs/decisiones.md: reglas del motor (progresión, estancamiento, descanso, PR, puntaje, e1RM y racha).
 
@@ -52,19 +55,23 @@ Claves de AsyncStorage:
 - fitnesscoach:v1:backup: respaldo legado; solo se usa como segunda opción al restaurar.
 - fitnesscoach:v1:draft: borrador del entreno en curso (rutina, inicio, series y posición);
   se borra al terminar o descartar.
-data = { schemaVersion: 2, unit, checkin: { date, level },
+data = { schemaVersion: 4, unit, checkin: { date, level },
 profile: { goal, ambition, level, daysPerWeek, weightKg, heightCm, age, sex,
   restStyle, tone, completed, updatedAt },
 coachMemory: [string], // últimos 8 ids de mensajes mostrados por Atlas
-routines: [{ id, name, goal, days: [0..6], defaults: { sets, reps, restSec }, exercises: [{ id, name, group, equipment, sets, reps, mode, rir }] }],
+customExercises: [{ id, name, group, equipment, type, muscles, met, metCode, source, custom }], // ejercicios creados por el usuario; se mezclan con exercises de src/exercises.js
+routines: [{ id, name, goal, days: [0..6], defaults: { sets, reps, restSec }, exercises: [{ id, name, group, equipment, sets, reps, mode, rir, restSec }] }], // mode 'default' usa defaults de la rutina; 'manual' usa sets/reps/restSec/rir propios
 workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName, comment,
+  adjusted: { reason }, // opcional: cansancio, dolor, poco tiempo, mal sueño
   prs: [{ exId, name, kind, weightKg, reps }],
-  score: { score, grade, components, restNotes, durationSec },
+  plan: [{ exId, name, group, type, targetReps, targetSets, targetRestSec, targetRir, recWeightKg }], // foto del plan al terminar; incluye ejercicios saltados
+  score: { score, grade, components: [{ key, label, value, weight }], restNotes, durationSec, v: 4, partial, missed: [{ exId, name }], adjusted },
   exercises: [{ exId, name, targetReps, targetSets, targetRestSec, recWeightKg,
     sets: [{ w, r, rir, failure, startedAt, endedAt, restBeforeSec, pr,
       confirmed: { r, w, rir }, unconfirmed }] }] }] }
 // sets sin `unconfirmed` son datos viejos válidos; `unconfirmed: true` los excluye de
 // motor, PR y puntaje. Pesos en kg; unit ausente se lee como kg.
+// `score.v` 4: pesos adaptativos según nivel (principiante vs intermedio), ajuste intencional (`adjusted`), tolerancia al descanso asimétrica (exceso penaliza menos), mínimo de 1 serie confirmada. `partial` marca sesiones viejas sin plan completo.
 // workouts: el más reciente primero. El id del ejercicio es el de src/exercises.js.
 
 ## Reglas
@@ -100,7 +107,7 @@ workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName, 
 - si algo que se este pidiendo es muy similar a algo que se esta pidiendo otra vez, comunicalo
 
 ## Estado
-- Hecho: app base, base de ejercicios, perfil, motor de recomendación, entrenamiento
-  guiado, calorías, gráficas básicas, pruebas del motor (34), rediseño completo de la pestaña Rutinas, rediseño completo de la pestaña Progreso, y rediseño completo de la pestaña Inicio (estado día de descanso, chequeo de energía, tarjeta de mañana, récord cercano y resumen rápido).
+- Hecho: app base, base de ejercicios (79), perfil, motor de recomendación, entrenamiento
+  guiado, calorías, gráficas básicas, pruebas del motor y puntaje (49), rediseño completo de la pestaña Rutinas (+buscador, ejercicios personalizados en data.customExercises), rediseño completo de la pestaña Progreso, rediseño completo de la pestaña Inicio (estado día de descanso, chequeo de energía, tarjeta de mañana, récord cercano y resumen rápido), y puntaje de sesión v4 (guía de adherencia, ajuste intencional por cansancio/dolor/tiempo, pesos adaptativos por nivel, tolerancia al descanso asimétrica, racha protegida por autocuidado, promedio móvil 4 semanas y recálculo automático del historial).
 - Por confirmar: fallo 10 (fuente Inter en H y Btn de src/ui.js); no consta como hecho.
 - Pendiente: mejoras (Ajustes, salud y lesiones, configuración y accesibilidad, almacenamiento por mes).

@@ -50,6 +50,11 @@ export const exercises = [
   make('fondos', 'Fondos en paralelas', 'Pecho', 'Peso corporal', 'compuesto', ['Pectoral mayor', 'Tríceps', 'Deltoides anterior'], 'bodyweight'),
   make('aperturas-mancuernas', 'Aperturas con mancuernas', 'Pecho', 'Mancuernas', 'aislamiento', ['Pectoral mayor', 'Deltoides anterior'], 'weights'),
   make('peck-deck', 'Peck deck', 'Pecho', 'Máquina', 'aislamiento', ['Pectoral mayor'], 'weights'),
+  make('press-declinado', 'Press declinado con barra', 'Pecho', 'Barra', 'compuesto', ['Pectoral inferior', 'Tríceps'], 'weights'),
+  make('press-declinado-mancuernas', 'Press declinado con mancuernas', 'Pecho', 'Mancuernas', 'compuesto', ['Pectoral inferior', 'Tríceps'], 'weights'),
+  make('cruces-polea', 'Cruce de poleas', 'Pecho', 'Polea', 'aislamiento', ['Pectoral mayor'], 'weights'),
+  make('pullover-mancuerna', 'Pullover con mancuerna', 'Pecho', 'Mancuernas', 'aislamiento', ['Pectoral mayor', 'Serrato anterior'], 'weights'),
+  make('press-banca-maquina', 'Press de banca en máquina', 'Pecho', 'Máquina', 'compuesto', ['Pectoral mayor', 'Tríceps'], 'weights'),
 
   // Espalda
   make('dominadas', 'Dominadas', 'Espalda', 'Peso corporal', 'compuesto', ['Dorsal ancho', 'Bíceps', 'Romboides'], 'bodyweight'),
@@ -59,6 +64,11 @@ export const exercises = [
   make('remo-sentado', 'Remo sentado en polea', 'Espalda', 'Polea', 'compuesto', ['Dorsal ancho', 'Romboides', 'Trapecio medio'], 'weights'),
   make('peso-muerto', 'Peso muerto', 'Espalda', 'Barra', 'compuesto', ['Isquiotibiales', 'Glúteos', 'Erectores espinales', 'Dorsal ancho'], 'squatsDeads'),
   make('hiperextensiones', 'Hiperextensiones', 'Espalda', 'Peso corporal', 'aislamiento', ['Erectores espinales', 'Glúteos', 'Isquiotibiales'], 'bodyweight'),
+  make('jalon-tras-nuca', 'Jalón tras la nuca', 'Espalda', 'Polea', 'compuesto', ['Dorsal ancho', 'Redondo mayor', 'Bíceps'], 'weights'),
+  make('remo-gironda', 'Remo Gironda (polea baja)', 'Espalda', 'Polea', 'compuesto', ['Dorsal ancho', 'Romboides', 'Trapecio medio', 'Bíceps'], 'weights'),
+  make('remo-t', 'Remo con barra en T', 'Espalda', 'Barra', 'compuesto', ['Dorsal ancho', 'Romboides', 'Trapecio', 'Bíceps'], 'weights'),
+  make('pulldown-brazos-rectos', 'Pulldown de brazos rectos', 'Espalda', 'Polea', 'aislamiento', ['Dorsal ancho', 'Redondo mayor'], 'weights'),
+  make('remo-maquina', 'Remo sentado en máquina', 'Espalda', 'Máquina', 'compuesto', ['Dorsal ancho', 'Romboides', 'Bíceps'], 'weights'),
 
   // Hombros
   make('press-militar', 'Press militar', 'Hombros', 'Barra', 'compuesto', ['Deltoides anterior', 'Deltoides lateral', 'Tríceps'], 'weights'),
@@ -66,18 +76,30 @@ export const exercises = [
   make('elevaciones-laterales', 'Elevaciones laterales', 'Hombros', 'Mancuernas', 'aislamiento', ['Deltoides lateral'], 'weights'),
   make('pajaro', 'Pájaro', 'Hombros', 'Mancuernas', 'aislamiento', ['Deltoides posterior', 'Romboides'], 'weights'),
   make('face-pull', 'Face pull', 'Hombros', 'Polea', 'aislamiento', ['Deltoides posterior', 'Romboides', 'Trapecio medio'], 'weights'),
+  make('press-arnold', 'Press Arnold con mancuernas', 'Hombros', 'Mancuernas', 'compuesto', ['Deltoides anterior', 'Deltoides lateral', 'Tríceps'], 'weights'),
+  make('elevaciones-frontales', 'Elevaciones frontales con mancuernas', 'Hombros', 'Mancuernas', 'aislamiento', ['Deltoides anterior'], 'weights'),
+  make('elevaciones-laterales-polea', 'Elevaciones laterales en polea', 'Hombros', 'Polea', 'aislamiento', ['Deltoides lateral'], 'weights'),
+  make('press-hombro-maquina', 'Press de hombros en máquina', 'Hombros', 'Máquina', 'compuesto', ['Deltoides', 'Tríceps'], 'weights'),
 
   // Bíceps
   make('curl-barra', 'Curl con barra', 'Bíceps', 'Barra', 'aislamiento', ['Bíceps braquial', 'Braquial'], 'weights'),
   make('curl-mancuernas', 'Curl con mancuernas', 'Bíceps', 'Mancuernas', 'aislamiento', ['Bíceps braquial', 'Braquial'], 'weights'),
   make('curl-martillo', 'Curl martillo', 'Bíceps', 'Mancuernas', 'aislamiento', ['Braquial', 'Braquiorradial', 'Bíceps'], 'weights'),
   make('curl-predicador', 'Curl predicador', 'Bíceps', 'Barra Z', 'aislamiento', ['Bíceps braquial'], 'weights'),
+  make('curl-concentrado', 'Curl concentrado', 'Bíceps', 'Mancuernas', 'aislamiento', ['Bíceps braquial'], 'weights'),
+  make('curl-banco-scott-mancuerna', 'Curl en banco Scott con mancuerna', 'Bíceps', 'Mancuernas', 'aislamiento', ['Bíceps braquial'], 'weights'),
+  make('curl-inverso', 'Curl inverso con barra', 'Bíceps', 'Barra', 'aislamiento', ['Braquiorradial', 'Bíceps braquial', 'Antebrazo'], 'weights'),
+  make('curl-polea-baja', 'Curl de bíceps en polea baja', 'Bíceps', 'Polea', 'aislamiento', ['Bíceps braquial'], 'weights'),
 
   // Tríceps
   make('press-frances', 'Press francés', 'Tríceps', 'Barra Z', 'aislamiento', ['Tríceps (cabeza larga)'], 'weights'),
   make('extension-triceps-polea', 'Extensión de tríceps en polea', 'Tríceps', 'Polea', 'aislamiento', ['Tríceps'], 'weights'),
   make('fondos-banco', 'Fondos en banco', 'Tríceps', 'Peso corporal', 'compuesto', ['Tríceps', 'Pectoral mayor', 'Deltoides anterior'], 'bodyweight'),
   make('patada-triceps', 'Patada de tríceps', 'Tríceps', 'Mancuernas', 'aislamiento', ['Tríceps'], 'weights'),
+  make('extension-triceps-tras-cabeza', 'Extensión de tríceps tras cabeza', 'Tríceps', 'Mancuernas', 'aislamiento', ['Tríceps (cabeza larga)'], 'weights'),
+  make('extension-triceps-cuerda', 'Extensión de tríceps con cuerda', 'Tríceps', 'Polea', 'aislamiento', ['Tríceps'], 'weights'),
+  make('press-banca-cerrado', 'Press de banca con agarre cerrado', 'Tríceps', 'Barra', 'compuesto', ['Tríceps', 'Pectoral mayor'], 'weights'),
+  make('extension-triceps-maquina', 'Extensión de tríceps en máquina', 'Tríceps', 'Máquina', 'aislamiento', ['Tríceps'], 'weights'),
 
   // Piernas
   make('sentadilla', 'Sentadilla con barra', 'Piernas', 'Barra', 'compuesto', ['Cuádriceps', 'Glúteos', 'Isquiotibiales', 'Erectores espinales'], 'squatsDeads'),
@@ -88,35 +110,61 @@ export const exercises = [
   make('extension-cuadriceps', 'Extensión de cuádriceps', 'Piernas', 'Máquina', 'aislamiento', ['Cuádriceps'], 'weights'),
   make('curl-femoral', 'Curl femoral', 'Piernas', 'Máquina', 'aislamiento', ['Isquiotibiales'], 'weights'),
   make('elevacion-gemelos', 'Elevación de gemelos', 'Piernas', 'Máquina', 'aislamiento', ['Gastrocnemio', 'Sóleo'], 'weights'),
+  make('sentadilla-bulgara', 'Sentadilla búlgara', 'Piernas', 'Mancuernas', 'compuesto', ['Cuádriceps', 'Glúteos', 'Isquiotibiales'], 'weights'),
+  make('hack-squat', 'Sentadilla Hack', 'Piernas', 'Máquina', 'compuesto', ['Cuádriceps', 'Glúteos'], 'weights'),
+  make('sentadilla-sumo', 'Sentadilla sumo', 'Piernas', 'Barra', 'compuesto', ['Cuádriceps', 'Glúteos', 'Aductores'], 'squatsDeads'),
+  make('curl-femoral-sentado', 'Curl femoral sentado', 'Piernas', 'Máquina', 'aislamiento', ['Isquiotibiales'], 'weights'),
+  make('sentadilla-copa', 'Sentadilla goblet (copa)', 'Piernas', 'Mancuernas', 'compuesto', ['Cuádriceps', 'Glúteos', 'Core'], 'weights'),
+  make('aductores-maquina', 'Aductores en máquina', 'Piernas', 'Máquina', 'aislamiento', ['Aductores'], 'weights'),
 
   // Glúteos
   make('hip-thrust', 'Hip thrust', 'Glúteos', 'Barra', 'compuesto', ['Glúteos', 'Isquiotibiales'], 'weights'),
   make('patada-gluteo', 'Patada de glúteo', 'Glúteos', 'Polea', 'aislamiento', ['Glúteo mayor'], 'weights'),
   make('puente-gluteo', 'Puente de glúteo', 'Glúteos', 'Peso corporal', 'aislamiento', ['Glúteos', 'Isquiotibiales'], 'bodyweight'),
+  make('hip-thrust-maquina', 'Hip thrust en máquina', 'Glúteos', 'Máquina', 'compuesto', ['Glúteos', 'Isquiotibiales'], 'weights'),
+  make('abductores-maquina', 'Abductores en máquina', 'Glúteos', 'Máquina', 'aislamiento', ['Glúteo medio', 'Glúteo menor'], 'weights'),
 
   // Core
   make('crunch-polea', 'Crunch en polea', 'Core', 'Polea', 'aislamiento', ['Recto abdominal', 'Oblicuos'], 'weights'),
   make('plancha', 'Plancha', 'Core', 'Peso corporal', 'aislamiento', ['Recto abdominal', 'Transverso abdominal', 'Oblicuos'], 'bodyweight'),
   make('elevacion-piernas', 'Elevación de piernas', 'Core', 'Peso corporal', 'aislamiento', ['Recto abdominal', 'Iliopsoas'], 'bodyweight'),
+  make('rueda-abdominal', 'Rueda abdominal (Ab wheel)', 'Core', 'Peso corporal', 'aislamiento', ['Recto abdominal', 'Transverso abdominal', 'Core'], 'bodyweight'),
+  make('elevacion-piernas-colgado', 'Elevación de piernas colgado', 'Core', 'Peso corporal', 'aislamiento', ['Recto abdominal', 'Flexores de cadera'], 'bodyweight'),
+  make('plancha-lateral', 'Plancha lateral', 'Core', 'Peso corporal', 'aislamiento', ['Oblicuos', 'Transverso abdominal'], 'bodyweight'),
+  make('giros-rusos', 'Giros rusos con peso', 'Core', 'Mancuernas', 'aislamiento', ['Oblicuos', 'Recto abdominal'], 'weights'),
 
   // Trapecio y antebrazo
   make('encogimientos', 'Encogimientos de hombros', 'Trapecio', 'Mancuernas', 'aislamiento', ['Trapecio superior'], 'weights'),
   make('curl-muneca', 'Curl de muñeca', 'Antebrazo', 'Mancuernas', 'aislamiento', ['Flexores de la muñeca'], 'weights'),
+  make('encogimientos-barra', 'Encogimientos con barra', 'Trapecio', 'Barra', 'aislamiento', ['Trapecio superior'], 'weights'),
+  make('paseo-granjero', 'Paseo del granjero', 'Antebrazo', 'Mancuernas', 'compuesto', ['Antebrazo', 'Trapecio', 'Core', 'Agarre'], 'weights'),
 ];
 
-export const exerciseById = (id) => exercises.find((e) => e.id === id) || null;
+let registeredCustomExercises = [];
+export const registerCustomExercises = (list) => {
+  registeredCustomExercises = list || [];
+};
+
+export const exerciseById = (id) => {
+  return exercises.find((e) => e.id === id) || registeredCustomExercises.find((e) => e.id === id) || null;
+};
 
 const normalize = (s) =>
   String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
 // Filtra por texto (nombre, grupo, equipo o músculos) y por grupo muscular.
-export function filterExercises(query = '', group = 'Todos') {
+export function filterExercises(query = '', group = 'Todos', extraCustom = []) {
+  const all = [...exercises, ...registeredCustomExercises, ...extraCustom];
+  const map = new Map();
+  all.forEach(e => map.set(e.id, e));
+  const unique = Array.from(map.values());
+
   const q = normalize(query.trim());
-  return exercises.filter((e) => {
+  return unique.filter((e) => {
     const inGroup = group === 'Todos' || e.group === group;
     if (!inGroup) return false;
     if (!q) return true;
-    return normalize(`${e.name} ${e.group} ${e.equipment} ${e.muscles.join(' ')}`).includes(q);
+    return normalize(`${e.name} ${e.group} ${e.equipment} ${(e.muscles || []).join(' ')}`).includes(q);
   });
 }
 

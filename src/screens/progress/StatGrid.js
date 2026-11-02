@@ -52,6 +52,19 @@ export default function StatGrid({ stats }) {
           </Card>
         </View>
       </View>
+      <Card style={{ padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <View>
+          <T mute style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.12 * 12 }}>Puntaje medio</T>
+          <T style={{ fontSize: 28, fontWeight: '800', color: C.accent, marginTop: 4 }}>{stats.sessions ? stats.avgScore : '—'}</T>
+        </View>
+        <T mute style={{ fontSize: 12, textAlign: 'right' }}>
+          {stats.sessions
+            ? stats.prevSessions
+              ? `${stats.diffScore >= 0 ? '+' : ''}${stats.diffScore} pts vs. periodo anterior`
+              : 'sin periodo anterior para comparar'
+            : 'sin sesiones en el periodo'}
+        </T>
+      </Card>
     </View>
   );
 }

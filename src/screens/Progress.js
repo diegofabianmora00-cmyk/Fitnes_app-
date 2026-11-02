@@ -13,6 +13,7 @@ import StatGrid from './progress/StatGrid';
 import CoachCard from './progress/CoachCard';
 import PrCard from './progress/PrCard';
 import MuscleCard from './progress/MuscleCard';
+import RoutineScoresCard from './progress/RoutineScoresCard';
 import HistoryList from './progress/HistoryList';
 import EmptyProgress from './progress/EmptyProgress';
 
@@ -89,14 +90,18 @@ export default function Progress() {
       </FadeIn>
 
       <FadeIn delay={240}>
-        <PrCard data={data} />
+        <RoutineScoresCard data={data} />
       </FadeIn>
 
       <FadeIn delay={280}>
-        <MuscleCard data={data} rango={rango} />
+        <PrCard data={data} />
       </FadeIn>
 
       <FadeIn delay={320}>
+        <MuscleCard data={data} rango={rango} />
+      </FadeIn>
+
+      <FadeIn delay={360}>
         <HistoryList data={data} />
       </FadeIn>
     </ScrollView>

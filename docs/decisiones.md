@@ -18,11 +18,15 @@ Este documento detalla las reglas, heurísticas y fórmulas científicas o de cr
 - **Criterio de la app:** Récord de peso (máxima carga levantada con al menos 1 repetición) y récord de repeticiones (mayor número de repeticiones a una carga dada).
 - **e1RM (Estimación de 1 Repetición Máxima):** Se calcula utilizando la fórmula estándar de **Epley** ($1RM = w \times (1 + \frac{r}{30})$), ampliamente validada en literatura de fuerza.
 
-## 5. Puntaje de Sesión
-- **Criterio de la app:**
-  - 50% Repeticiones completadas frente al objetivo.
-  - 30% Peso usado frente al recomendado.
-  - 20% Adherencia al tiempo de descanso real frente al recomendado.
+## 5. Puntaje de Sesión (v4)
+- **Criterio de la app, apoyado en evidencia sobre dosis, esfuerzo y carga:**
+  - **Pesos (Intermedios/Avanzados):** 40% Plan cumplido, 20% Carga (tope en 100%), 25% Esfuerzo (RIR), 10% Descanso, 5% Progreso.
+  - **Pesos (Principiantes):** 45% Plan cumplido, 20% Carga, 15% Esfuerzo (RIR), 15% Descanso, 5% Progreso.
+  - **Ajuste intencional (`adjusted`):** Si el usuario ajusta por cansancio/poco tiempo, se omite la penalización de carga o plan no realizado. Si es por dolor, la sesión se protege ("Sesión protegida", puntaje nulo de apoyo).
+  - **Tolerancia al descanso:** Descansar de más penaliza de forma mucho más suave que descansar de menos.
+  - **Datos insuficientes:** Se requiere al menos 1 serie confirmada para puntuar; de lo contrario se indica "Datos insuficientes".
+- **Por qué esos pesos:** La dosis (volumen) y la adherencia al plan son la prioridad para guiar sin juzgar. En principiantes se prioriza aún más el plan y el descanso sobre el esfuerzo extremo.
+- **Fuentes:** ACSM (2009); Schoenfeld et al. (2017); Refalo et al. (2023); Grgic et al. (2017); Zourdos et al. (2016); criterio de la app.
 
 ## 6. Racha y Criterio para Rutinas sin Días Asignados
 - **Criterio de la app:** 

@@ -5,12 +5,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { C } from './theme';
 import { Field, Press, T } from './ui';
 import { COMPENDIUM, GROUPS, filterExercises } from './exercises';
+import { useStore } from './store';
+import CustomExerciseModal from './CustomExerciseModal';
 
 export default function ExercisePicker({ visible, onClose, onSelect, selectedId, allowAll = false, onSelectAll }) {
   const ins = useSafeAreaInsets();
+  const { data } = useStore();
   const [q, setQ] = useState('');
   const [group, setGroup] = useState('Todos');
-  const list = useMemo(() => filterExercises(q, group), [q, group]);
+  const [customModalVisible, setCustomModalVisible] = useState(false);
+  const list = useMemo(
+    () => filterExercises(q, group, data.customExercises || []),
+    [q, group, data.customExercises],
+  );
 
   const pick = (item) => {
     onSelect(item);
@@ -67,6 +74,13 @@ export default function ExercisePicker({ visible, onClose, onSelect, selectedId,
           contentContainerStyle={{ padding: 18, paddingBottom: Math.max(ins.bottom, 18) + 10 }}
           ListHeaderComponent={
             <View>
+              <Press
+                onPress={() => setCustomModalVisible(true)}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: C.accentDim, borderWidth: 1, borderColor: C.accent, borderRadius: 16, padding: 14, marginBottom: 12, gap: 8 }}
+              >
+                <Ionicons name="add-circle" size={20} color={C.accent} />
+                <T style={{ fontSize: 16, fontWeight: '700', color: C.accent }}>Crear ejercicio personalizado</T>
+              </Press>
               {allowAll && (
                 <Press
                   onPress={() => { if (onSelectAll) onSelectAll(); else onSelect(null); onClose(); }}
@@ -100,6 +114,11 @@ export default function ExercisePicker({ visible, onClose, onSelect, selectedId,
               </Press>
             );
           }}
+        />
+        <CustomExerciseModal
+          visible={customModalVisible}
+          onClose={() => setCustomModalVisible(false)}
+          onCreated={(newItem) => pick(newItem)}
         />
       </View>
     </Modal>

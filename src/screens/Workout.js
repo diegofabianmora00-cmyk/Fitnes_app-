@@ -53,7 +53,19 @@ const Ring = React.memo(function Ring({ progress, center }) {
 
 const DRAFT_KEY = KEYS.draft;
 
-const initLog = (data, routine, u) => routine.exercises.map((ex) => {
+const resolveRoutineEx = (routine, ex) => {
+  const d = routine.defaults || {};
+  if (ex.mode === 'manual') return ex;
+  return {
+    ...ex,
+    sets: Number(d.sets) || Number(ex.sets) || 3,
+    reps: Number(d.reps) || Number(ex.reps) || 10,
+    restSec: Number(d.restSec) || ex.restSec || null,
+  };
+};
+
+const initLog = (data, routine, u) => routine.exercises.map((raw) => {
+  const ex = resolveRoutineEx(routine, raw);
   const rec = recommendFor(data, ex);
   const prev = lastSets(data, ex.id);
   const suggestedWeight = rec.weightKg == null ? '' : (rec.weightKg > 0 ? String(toU(rec.weightKg, u)) : '');
@@ -265,6 +277,19 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
     setPhase('start');
   };
 
+  const handleFinishPress = () => {
+    if (!isLast) {
+      goNextExercise();
+      return;
+    }
+    Alert.alert('Terminar sesión', '¿Deseas registrar algún ajuste especial hoy?', [
+      { text: 'Guardar normal', onPress: () => finishSession() },
+      { text: 'Ajusté a propósito (cansancio/sueño)', onPress: () => finishSession({ adjusted: { reason: 'cansancio' } }) },
+      { text: 'Ajusté a propósito (poco tiempo)', onPress: () => finishSession({ adjusted: { reason: 'poco tiempo' } }) },
+      { text: 'Paré por dolor', onPress: () => finishSession({ adjusted: { reason: 'dolor' } }) },
+      { text: 'Cancelar', style: 'cancel' },
+    ]);
+  };
   const goNextExercise = () => {
     if (exIndex + 1 < log.length) {
       setExIndex((i) => i + 1);
@@ -403,6 +428,17 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
       Alert.alert('Sin series', 'Marca al menos una serie como hecha.');
       return;
     }
+    const plan = log.map((b) => ({
+      exId: b.ex.id,
+      name: b.ex.name,
+      group: b.ex.group,
+      type: b.ex.type,
+      targetReps: Number(b.rec.targetReps || b.ex.reps) || 0,
+      targetSets: Number(b.ex.sets) || b.sets.length || 1,
+      targetRestSec: Number(b.rec.restSec) || Number(b.ex.restSec) || 0,
+      targetRir: targetRir(b.rec),
+      recWeightKg: Number(b.rec.weightKg) || 0,
+    }));
     const workout = {
       id: uid(),
       date: endedAt,
@@ -411,7 +447,9 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
       startedAt: sessionStart.current,
       endedAt,
       durationSec: Math.max(1, Math.round((endedAt - sessionStart.current) / 1000)),
+      plan,
       exercises,
+      adjusted: opts.adjusted || null,
     };
     const records = newRecords(data, workout);
     records.forEach((r) => {
@@ -458,6 +496,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
     targetReps: rec.targetReps || cur.ex.reps,
     targetSets: cur.ex.sets,
     targetRestSec: rec.restSec,
+    targetRir: targetRir(rec),
     recWeightKg: rec.weightKg,
     sets: cur.sets,
   }) : null;
@@ -841,13 +880,13 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
                 </View>
                 <T style={{ fontSize: 12, color: C.mute }}>criterio de la app</T>
               </View>
-              <View style={{ flexDirection: 'row', gap: 14, width: '100%' }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, width: '100%' }}>
                 {(sc ? sc.components : []).map((c) => {
                   const pct = Math.round(c.value * 100);
                   return (
-                    <View key={c.key} style={{ flex: 1 }}>
+                    <View key={c.key} style={{ width: '47%' }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <T style={{ fontSize: 13, color: C.mute }}>{c.label === 'Reps' ? 'Reps' : c.label === 'Peso' ? 'Peso' : 'Descanso'}</T>
+                        <T style={{ fontSize: 13, color: C.mute }}>{c.label}</T>
                         <T style={{ fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] }}>{pct}%</T>
                       </View>
                       <View style={{ height: 6, borderRadius: 3, backgroundColor: C.track, overflow: 'hidden' }}>
@@ -868,7 +907,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
               </Card>
               <T style={{ fontSize: 13, color: C.mute, textAlign: 'center' }}>{kcalLine} {finalText}</T>
               <View style={{ flex: 1 }} />
-              <Btn label={isLast ? 'Terminar sesión' : 'Siguiente ejercicio'} onPress={() => { if (isLast) finishSession(); else goNextExercise(); }} />
+              <Btn label={isLast ? 'Terminar sesión' : 'Siguiente ejercicio'} onPress={handleFinishPress} />
             </View>
           </ScrollView>
         </LinearGradient>
@@ -878,3 +917,4 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
 
   return null;
 }
+

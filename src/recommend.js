@@ -44,6 +44,15 @@ export const SOURCES = {
   zourdos2016:
     'Zourdos MC, Jo E, Khamoui AV, et al. Novel Resistance Training-Specific RPE Scale Measuring ' +
     'Repetitions in Reserve. J Strength Cond Res. 2016;30(1):267-275.',
+  schoenfeld2017volume:
+    'Schoenfeld BJ, Ogborn D, Krieger JW. Dose-response relationship between weekly resistance training ' +
+    'volume and increases in muscle mass: a systematic review and meta-analysis. J Sports Sci. 2017;35(11):1073-1082.',
+  schoenfeld2017load:
+    'Schoenfeld BJ, Grgic J, Ogborn D, Krieger JW. Strength and hypertrophy adaptations between low- vs. ' +
+    'high-load resistance training: a systematic review and meta-analysis. J Strength Cond Res. 2017;31(12):3508-3523.',
+  refalo2023:
+    'Refalo MC, Helms ER, Trexler ET, Hamilton DL, Fyfe JJ. Influence of resistance training proximity-to-failure ' +
+    'on skeletal muscle hypertrophy: a systematic review with meta-analysis. Sports Med. 2023;53(3):649-665.',
   app: 'Criterio de Fitness Coach. No es una recomendación clínica.',
 };
 
@@ -187,9 +196,11 @@ export const RULES = {
     id: 'score',
     title: 'Puntaje de sesión',
     detail:
-      'Puntaje = 50% repeticiones completadas + 30% peso usado frente al recomendado + 20% adherencia al ' +
-      'descanso. Si falta un dato, se reparte el peso. Es una fórmula de la app, no una medida científica.',
-    source: SOURCES.app,
+      'Puntaje = 40% plan cumplido (series y repeticiones) + 20% carga + 25% esfuerzo (RIR) + 10% descanso + ' +
+      '5% progreso. El plan y el esfuerzo pesan más porque la dosis de entrenamiento y acercarse al fallo son ' +
+      'los factores con más respaldo; el PR pesa poco porque una sola sesión no define el progreso. Si falta un ' +
+      'dato, se reparte el peso entre los bloques disponibles. Los pesos exactos son criterio de la app.',
+    source: `${SOURCES.app} ${SOURCES.schoenfeld2017volume} ${SOURCES.refalo2023} ${SOURCES.schoenfeld2017load} ${SOURCES.grgic2017} ${SOURCES.zourdos2016}`,
     kind: 'app',
   },
   bodyweight: {
@@ -439,7 +450,8 @@ export function recommendFor(data = {}, ex = {}) {
   const group = ex.group || (db && db.group) || '';
   const baseTarget = Math.max(1, Number(ex.reps) || 8);
   const range = repRangeFor(profile);
-  const restSec = restFor(profile, type);
+  const customRest = Number(ex.restSec);
+  const restSec = customRest > 0 ? Math.round(customRest) : restFor(profile, type);
   const unit = data.unit || 'kg';
   const name = ex.name || (db && db.name) || 'Ejercicio';
   const history = sessionHistory(data, ex.id);
@@ -726,95 +738,339 @@ export function newRecords(data = {}, workout = {}) {
   return out;
 }
 
-export function sessionReview(data = {}, workout = {}) {
-  const profile = data.profile || {};
-  const exercises = workout.exercises || [];
-  let targetRepsTotal = 0;
-  let repsDone = 0;
-  let loadSum = 0;
-  let loadCount = 0;
-  let restSum = 0;
-  let restCount = 0;
-  const restNotes = [];
+const SCORE_WEIGHTS_DEFAULT = {
+  plan: 40,
+  load: 20,
+  effort: 25,
+  rest: 10,
+  progress: 5,
+};
 
-  for (const e of exercises) {
-    const targetReps = Number(e.targetReps ?? e.target) || 0;
-    const targetSets = Number(e.targetSets) || (e.sets || []).length || 1;
-    const sets = (e.sets || []).filter((s) => Number(s.r) > 0 && !s.unconfirmed);
-    const done = sets.reduce((a, s) => a + (Number(s.r) || 0), 0);
-    if (targetReps > 0) {
-      targetRepsTotal += targetSets * targetReps;
-      repsDone += done;
+const SCORE_WEIGHTS_BEGINNER = {
+  plan: 45,
+  load: 20,
+  effort: 15,
+  rest: 15,
+  progress: 5,
+};
+
+const getScoreWeights = (profile) =>
+  profile && profile.level === 'principiante' ? SCORE_WEIGHTS_BEGINNER : SCORE_WEIGHTS_DEFAULT;
+
+const SCORE_LABELS = {
+  plan: 'Plan cumplido',
+  load: 'Carga',
+  effort: 'Esfuerzo (RIR)',
+  rest: 'Descanso',
+  progress: 'Progress',
+};
+
+const scoreGrade = (score) =>
+  score >= 90 ? 'Excelente' : score >= 75 ? 'Bien' : score >= 60 ? 'Aceptable' : 'Margen de mejora';
+
+const scoreSets = (sets) => (sets || []).filter((s) => Number(s.r) > 0 && !s.unconfirmed);
+
+const setRir = (s) => {
+  if (!s) return null;
+  if (s.rir !== null && s.rir !== undefined && s.rir !== '') {
+    const n = Number(s.rir);
+    if (Number.isFinite(n)) return n;
+  }
+  return s.failure ? 0 : null;
+};
+
+const e1rmKg = (w, r) => {
+  const kg = Number(w) || 0;
+  const reps = Number(r) || 0;
+  return kg > 0 && reps > 0 ? kg * (1 + reps / 30) : 0;
+};
+
+const bestSetMetric = (sets) => {
+  const valid = scoreSets(sets);
+  if (!valid.length) return { value: 0, kind: 'none' };
+  const loaded = valid.filter((s) => (Number(s.w) || 0) > 0);
+  if (loaded.length) {
+    return { value: Math.max(...loaded.map((s) => e1rmKg(s.w, s.r))), kind: 'e1rm' };
+  }
+  return { value: Math.max(...valid.map((s) => Number(s.r) || 0)), kind: 'reps' };
+};
+
+const bestBefore = (data, workout, exId, kind) => {
+  const when = Number(workout.date) || 0;
+  let best = 0;
+  for (const w of data.workouts || []) {
+    if (w.id === workout.id) continue;
+    if ((Number(w.date) || 0) >= when) continue;
+    for (const e of w.exercises || []) {
+      if (e.exId !== exId) continue;
+      const m = bestSetMetric(e.sets);
+      if (m.kind === kind && m.value > best) best = m.value;
     }
-    const avg = sets.length ? sets.reduce((a, s) => a + (Number(s.w) || 0), 0) / sets.length : 0;
-    const recW = Number(e.recWeightKg) || 0;
-    loadSum += recW > 0 ? clamp(avg / recW, 0, 1) : clamp(sets.length / targetSets, 0, 1);
-    loadCount++;
-    const db = exerciseById(e.exId);
-    const targetRest = Number(e.targetRestSec) || restFor(profile, (db && db.type) || 'compuesto');
-    const ri = restFeedbackFromSets(sets, targetRest);
-    if (ri) {
-      restSum += clamp(1 - Math.abs(ri.dev) / Math.max(1, targetRest), 0, 1);
-      restCount++;
-      if (ri.kind !== 'ok') {
-        const missed = sets.some((s) => (Number(s.r) || 0) < targetReps);
-        restNotes.push({
-          exId: e.exId,
-          name: e.name,
-          ...ri,
-          text: restInsightText(ri.kind, ri.actual, targetRest, missed, e.name || 'este ejercicio'),
-        });
+  }
+  return best;
+};
+
+function scoreExerciseParts(data, planItem, performed, workout, includeProgress, weights) {
+  const p = planItem || {};
+  const e = performed || {};
+  const sets = scoreSets(e.sets);
+  const targetSets = Math.max(1, Number(p.targetSets ?? e.targetSets) || Number(e.targetSets) || sets.length || 1);
+  const targetReps = Number(p.targetReps ?? e.targetReps) || Number(e.targetReps) || 0;
+  const targetRest = Number(p.targetRestSec ?? e.targetRestSec) || Number(e.targetRestSec) || 0;
+  const rawRir = p.targetRir ?? e.targetRir;
+  const targetRir = rawRir !== null && rawRir !== undefined && rawRir !== '' && Number.isFinite(Number(rawRir))
+    ? Number(rawRir)
+    : 2;
+  const recWeight = Number(p.recWeightKg ?? e.recWeightKg) || Number(e.recWeightKg) || 0;
+  const adjusted = workout && workout.adjusted;
+  const parts = {};
+
+  const repsVals = [];
+  for (let i = 0; i < targetSets; i++) {
+    const s = sets[i];
+    if (!s) {
+      repsVals.push(0);
+      continue;
+    }
+    const r = Number(s.r) || 0;
+    repsVals.push(targetReps > 0 ? Math.min(1, r / targetReps) : r > 0 ? 1 : 0);
+  }
+  const repsPct = repsVals.reduce((a, b) => a + b, 0) / targetSets;
+  parts.plan = { value: clamp(repsPct, 0, 1), weight: weights.plan };
+
+  if (!adjusted && recWeight > 0 && sets.length) {
+    const avgWeight = sets.reduce((a, s) => a + (Number(s.w) || 0), 0) / sets.length;
+    parts.load = { value: clamp(avgWeight / recWeight, 0, 1), weight: weights.load };
+  }
+
+  const rirs = sets.map(setRir).filter((v) => v !== null);
+  if (rirs.length) {
+    const vals = rirs.map((rir) => {
+      const dev = Math.abs(rir - targetRir);
+      if (dev <= 1) return 1;
+      if (dev === 2) return 0.75;
+      return 0.3;
+    });
+    parts.effort = { value: vals.reduce((a, b) => a + b, 0) / vals.length, weight: weights.effort };
+  }
+
+  if (targetRest > 0) {
+    const rests = sets
+      .map((s) => Number(s.restBeforeSec))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    if (rests.length) {
+      const tolerance = Math.max(25, Math.round(targetRest * 0.25));
+      const vals = rests.map((actual) => {
+        const dev = actual - targetRest;
+        if (Math.abs(dev) <= tolerance) return 1;
+        if (dev > 0) {
+          // Rested more than target: milder penalty
+          const excess = dev - tolerance;
+          return Math.max(0.7, 1 - excess / (2 * targetRest));
+        } else {
+          // Rested less than target: standard penalty
+          const deficit = Math.abs(dev) - tolerance;
+          return Math.max(0, 1 - deficit / Math.max(1, targetRest));
+        }
+      });
+      parts.rest = { value: vals.reduce((a, b) => a + b, 0) / vals.length, weight: weights.rest };
+    }
+  }
+
+  if (includeProgress && workout && e.exId) {
+    const current = bestSetMetric(e.sets);
+    if (current.value > 0) {
+      const previous = bestBefore(data, workout, e.exId, current.kind);
+      if (previous > 0) {
+        const ratio = current.value / previous;
+        let value = 0.15;
+        if (ratio >= 1.02) value = 1;
+        else if (ratio >= 0.99) value = 0.85;
+        else if (ratio >= 0.95) value = 0.65;
+        else if (ratio >= 0.9) value = 0.4;
+        const hasPr = (workout.prs || []).some((pr) => pr.exId === e.exId) || sets.some((s) => s.pr);
+        parts.progress = { value: hasPr ? 1 : value, weight: weights.progress };
       }
     }
   }
 
-  const repsPct = targetRepsTotal > 0 ? clamp(repsDone / targetRepsTotal, 0, 1) : repsDone > 0 ? 1 : 0;
-  const loadPct = loadCount ? clamp(loadSum / loadCount, 0, 1) : 1;
-  const restPct = restCount ? clamp(restSum / restCount, 0, 1) : null;
-  const components = [
-    { key: 'reps', label: 'Repeticiones', value: repsPct, weight: 50 },
-    { key: 'load', label: 'Peso', value: loadPct, weight: 30 },
-  ];
-  if (restPct !== null) components.push({ key: 'rest', label: 'Descanso', value: restPct, weight: 20 });
-  const totalWeight = components.reduce((a, c) => a + c.weight, 0);
-  const score = Math.round((components.reduce((a, c) => a + c.value * c.weight, 0) / totalWeight) * 100);
-  const grade = score >= 90 ? 'Excelente' : score >= 75 ? 'Bien' : score >= 60 ? 'Aceptable' : 'A revisar';
-  return { score, grade, components, restNotes, durationSec: Number(workout.durationSec) || 0 };
+  return { parts, targetSets, targetReps, targetRest, sets };
+}
+
+function combineParts(parts = {}, weights) {
+  const entries = Object.entries(parts).filter(([, part]) => part && part.weight > 0);
+  const totalWeight = entries.reduce((a, [, part]) => a + part.weight, 0);
+  if (!totalWeight) return { score: 0, components: [] };
+  const components = entries.map(([key, part]) => ({
+    key,
+    label: SCORE_LABELS[key] || key,
+    value: clamp(part.value, 0, 1),
+    weight: part.weight,
+  }));
+  const score = Math.round((entries.reduce((a, [, part]) => a + clamp(part.value, 0, 1) * part.weight, 0) / totalWeight) * 100);
+  return { score, components };
+}
+
+export function sessionReview(data = {}, workout = {}) {
+  const profile = data.profile || {};
+  const weights = getScoreWeights(profile);
+
+  if (workout.adjusted && workout.adjusted.reason === 'dolor') {
+    return {
+      score: null,
+      grade: 'Sesión protegida',
+      supportMessage: 'Escuchaste a tu cuerpo y paraste por dolor. Hoy lo importante es descansar.',
+      components: [],
+      v: 4,
+      adjusted: workout.adjusted,
+      restNotes: [],
+      missed: [],
+      durationSec: Number(workout.durationSec) || 0,
+    };
+  }
+
+  const performed = workout.exercises || [];
+  const totalValidSets = performed.flatMap((e) => scoreSets(e.sets)).length;
+  if (totalValidSets === 0) {
+    return {
+      score: null,
+      grade: 'Datos insuficientes',
+      supportMessage: 'No hay series confirmadas suficientes para calcular puntaje en esta sesión.',
+      components: [],
+      v: 4,
+      adjusted: workout.adjusted || null,
+      restNotes: [],
+      missed: [],
+      durationSec: Number(workout.durationSec) || 0,
+    };
+  }
+
+  const hasPlan = Array.isArray(workout.plan) && workout.plan.length > 0;
+  const isPocoTiempo = workout.adjusted && workout.adjusted.reason === 'poco tiempo';
+  const plan = isPocoTiempo && performed.length < (workout.plan || []).length
+    ? workout.plan.slice(0, performed.length)
+    : (hasPlan ? workout.plan : performed);
+  const restNotes = [];
+  const missed = [];
+  const acc = {};
+
+  const addPart = (key, part, exerciseWeight) => {
+    if (!part) return;
+    const bucket = acc[key] || (acc[key] = { sum: 0, weight: 0 });
+    bucket.sum += part.value * part.weight * exerciseWeight;
+    bucket.weight += part.weight * exerciseWeight;
+  };
+
+  plan.forEach((p, index) => {
+    const at = performed[index];
+    const e = at && at.exId === p.exId ? at : performed.find((x) => x.exId === p.exId) || {};
+    const item = scoreExerciseParts(data, p, e, workout, true, weights);
+    const exerciseWeight = Math.max(1, item.targetSets);
+    Object.entries(item.parts).forEach(([key, part]) => addPart(key, part, exerciseWeight));
+
+    if (!item.sets.length) {
+      missed.push({ exId: p.exId || e.exId, name: p.name || e.name || 'Ejercicio' });
+      return;
+    }
+
+    const db = exerciseById(p.exId || e.exId);
+    const type = p.type || e.type || (db && db.type) || 'compuesto';
+    const targetRest = item.targetRest || restFor(profile, type);
+    const ri = restFeedbackFromSets(item.sets, targetRest);
+    if (ri && ri.kind !== 'ok') {
+      const didNotReach = item.sets.some((s) => (Number(s.r) || 0) < item.targetReps);
+      restNotes.push({
+        exId: p.exId || e.exId,
+        name: p.name || e.name,
+        ...ri,
+        text: restInsightText(ri.kind, ri.actual, targetRest, didNotReach, p.name || e.name || 'este ejercicio'),
+      });
+    }
+  });
+
+  const parts = {};
+  Object.entries(acc).forEach(([key, bucket]) => {
+    if (bucket.weight > 0) parts[key] = { value: bucket.sum / bucket.weight, weight: weights[key] };
+  });
+  const combined = combineParts(parts, weights);
+  return {
+    score: combined.score,
+    grade: scoreGrade(combined.score),
+    components: combined.components,
+    restNotes,
+    durationSec: Number(workout.durationSec) || 0,
+    v: 4,
+    partial: !hasPlan,
+    missed,
+    adjusted: workout.adjusted || null,
+  };
 }
 
 export function exerciseReview(data = {}, e = {}) {
   const profile = data.profile || {};
-  const sets = (e.sets || []).filter((s) => Number(s.r) > 0 && !s.unconfirmed);
-  const targetReps = Number(e.targetReps) || 0;
-  const targetSets = Number(e.targetSets) || sets.length || 1;
-  const targetRest = Number(e.targetRestSec) || 90;
-  const recW = Number(e.recWeightKg) || 0;
+  const weights = getScoreWeights(profile);
+  const item = scoreExerciseParts(data, e, e, null, false, weights);
+  const combined = combineParts(item.parts, weights);
+  return { score: combined.score, grade: scoreGrade(combined.score), components: combined.components, v: 4 };
+}
 
-  const repsVals = sets.map((s) => (targetReps > 0 ? Math.min(1, (Number(s.r) || 0) / targetReps) : (Number(s.r) > 0 ? 1 : 0)));
-  const repsPct = repsVals.length ? repsVals.reduce((a, b) => a + b, 0) / repsVals.length : 0;
+export function rescoreWorkouts(data = {}) {
+  const workouts = (data.workouts || []).map((w) => {
+    if (w.score && Number(w.score.v) === 4) return w;
+    return { ...w, score: sessionReview(data, w) };
+  });
+  return { ...data, workouts };
+}
 
-  const avgW = sets.length ? sets.reduce((a, s) => a + (Number(s.w) || 0), 0) / sets.length : 0;
-  const loadPct = recW > 0 ? Math.min(1, avgW / recW) : null;
+export function movingAverage4w(data = {}, now = Date.now()) {
+  const workouts = data.workouts || [];
+  const last28Workouts = workouts.filter((w) => (w.date || 0) > 0 && now - w.date <= 28 * 864e5 && w.score && Number.isFinite(w.score.score));
+  if (!last28Workouts.length) return null;
+  const sum = last28Workouts.reduce((a, w) => a + w.score.score, 0);
+  return Math.round(sum / last28Workouts.length);
+}
 
-  const restVals = sets
-    .filter((s) => s.restBeforeSec !== null && s.restBeforeSec !== undefined)
-    .map((s) => {
-      const actual = Number(s.restBeforeSec) || 0;
-      const dev = Math.abs(actual - targetRest);
-      const threshold = Math.max(20, Math.round(targetRest * 0.2));
-      if (dev <= threshold) return 1;
-      const ratio = dev / Math.max(1, targetRest);
-      return Math.max(0, 1 - (ratio - 0.2) / 0.8);
+export function routineScores(data = {}, now = Date.now()) {
+  const workouts = data.workouts || [];
+  const routines = data.routines || [];
+  const groups = new Map();
+
+  for (const w of workouts) {
+    const key = w.routineId || w.routineName || 'libre';
+    if (!groups.has(key)) {
+      groups.set(key, { key, name: w.routineName || 'Entreno libre', workouts: [] });
+    }
+    groups.get(key).workouts.push(w);
+  }
+
+  const result = [];
+  for (const group of groups.values()) {
+    const list = [...group.workouts].sort((a, b) => (b.date || 0) - (a.date || 0));
+    const scores = list.map((w) => Number(w.score && w.score.score)).filter((n) => Number.isFinite(n) && n > 0);
+    if (!scores.length) continue;
+
+    const avg = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
+    const recent = scores.slice(0, 3);
+    const previous = scores.slice(3, 6);
+    const routine = routines.find((r) => r.id === group.key);
+    const dayTarget = routine && Array.isArray(routine.days) ? routine.days.length : 0;
+    const last28 = list.filter((w) => (w.date || 0) > 0 && now - w.date <= 28 * 864e5).length;
+    const consistency = dayTarget ? Math.min(100, Math.round((last28 / (4 * dayTarget)) * 100)) : null;
+
+    result.push({
+      routineId: group.key,
+      name: routine ? routine.name : group.name,
+      sessions: scores.length,
+      avgScore: Math.round(avg(scores)),
+      lastScore: scores[0],
+      bestScore: Math.max(...scores),
+      trend: previous.length ? Math.round(avg(recent) - avg(previous)) : null,
+      consistency,
+      lastDate: list[0].date || 0,
     });
-  const restPct = restVals.length ? restVals.reduce((a, b) => a + b, 0) / restVals.length : null;
+  }
 
-  const components = [{ key: 'reps', label: 'Reps', value: repsPct, weight: 50 }];
-  if (loadPct !== null) components.push({ key: 'load', label: 'Peso', value: loadPct, weight: 30 });
-  if (restPct !== null) components.push({ key: 'rest', label: 'Descanso', value: restPct, weight: 20 });
-  const totalWeight = components.reduce((a, c) => a + c.weight, 0);
-  const score = totalWeight > 0 ? Math.round((components.reduce((a, c) => a + c.value * c.weight, 0) / totalWeight) * 100) : 0;
-  const grade = score >= 90 ? 'Excelente' : score >= 75 ? 'Bien' : score >= 60 ? 'Aceptable' : 'A revisar';
-  return { score, grade, components };
+  return result.sort((a, b) => b.avgScore - a.avgScore || b.sessions - a.sessions);
 }
 
 export function weekSummary(data = {}) {
@@ -950,11 +1206,13 @@ export function streakInfo(data = {}, hoyMs = Date.now()) {
   const todayStartMs = todayDate.getTime();
 
   const workoutDays = new Set();
+  const adjustedDays = new Set();
   workouts.forEach((w) => {
     if (!w.date) return;
     const d = new Date(w.date);
     d.setHours(0, 0, 0, 0);
     workoutDays.add(d.getTime());
+    if (w.adjusted) adjustedDays.add(d.getTime());
   });
 
   const dayOfWeek = (todayDate.getDay() + 6) % 7;
@@ -965,7 +1223,7 @@ export function streakInfo(data = {}, hoyMs = Date.now()) {
   for (let i = 0; i < 7; i++) {
     const dMs = mondayMs + i * 86400000;
     const isToday = dMs === todayStartMs;
-    const hasWorkout = workoutDays.has(dMs);
+    const hasWorkout = workoutDays.has(dMs) || adjustedDays.has(dMs);
     const isAssigned = assignedDays.has(i);
 
     let state = 'rest';
@@ -981,7 +1239,8 @@ export function streakInfo(data = {}, hoyMs = Date.now()) {
 
   let current = 0;
   let best = 0;
-  const sortedWDays = Array.from(workoutDays).sort((a, b) => a - b);
+  const combinedWDays = new Set([...workoutDays, ...adjustedDays]);
+  const sortedWDays = Array.from(combinedWDays).sort((a, b) => a - b);
 
   if (hasAssigned) {
     if (sortedWDays.length > 0) {
@@ -992,7 +1251,7 @@ export function streakInfo(data = {}, hoyMs = Date.now()) {
         const dObj = new Date(m);
         const dayIdx = (dObj.getDay() + 6) % 7;
         const isSched = assignedDays.has(dayIdx);
-        const hasW = workoutDays.has(m);
+        const hasW = combinedWDays.has(m);
 
         if (isSched) {
           if (hasW) {
