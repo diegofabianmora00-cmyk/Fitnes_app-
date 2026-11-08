@@ -14,6 +14,7 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { exerciseById, registerCustomExercises } from './exercises';
+import { GYM_DEFAULT, defaultLoadType } from './load';
 import { rescoreWorkouts } from './recommend';
 import { setThemeMode } from './theme';
 
@@ -51,36 +52,28 @@ export const PROFILE_DEFAULT = {
 const LEGACY = { e1: 'press-banca', e2: 'press-militar', e3: 'fondos' };
 
 export const seed = {
-  schemaVersion: 4,
+  schemaVersion: 5,
   unit: 'kg',
   themeMode: 'dark',
+  gym: { ...GYM_DEFAULT },
   profile: { ...PROFILE_DEFAULT },
   coachMemory: [],
   customExercises: [],
-  routines: [{
-    id: 'r1',
-    name: 'Empuje',
-    goal: 'hipertrofia',
-    days: [0, 3],
-    defaults: { sets: 3, reps: 10, restSec: 120 },
-    exercises: [
-      { id: 'press-banca', name: 'Press de banca', group: 'Pecho', equipment: 'Barra', sets: 3, reps: 8, mode: 'default' },
-      { id: 'press-militar', name: 'Press militar', group: 'Hombros', equipment: 'Barra', sets: 3, reps: 10, mode: 'default' },
-      { id: 'fondos', name: 'Fondos en paralelas', group: 'Pecho', equipment: 'Peso corporal', sets: 3, reps: 12, mode: 'default' },
-    ]
-  }],
+  routines: [],
   workouts: [],
 };
 
 const normalizeExercise = (e) => {
   const id = LEGACY[e.id] || e.id;
   const db = exerciseById(id);
+  const equipment = e.equipment || (db && db.equipment) || '';
   return {
     ...e,
     id,
     name: e.name || (db && db.name) || id,
     group: e.group || (db && db.group) || '',
-    equipment: e.equipment || (db && db.equipment) || '',
+    equipment,
+    loadType: e.loadType || (db && db.loadType) || defaultLoadType(equipment, id),
   };
 };
 
@@ -116,6 +109,7 @@ const normalizeWorkoutExercise = (e) => {
     ...e,
     exId,
     name: e.name || (db && db.name) || exId,
+    loadType: e.loadType || (db && db.loadType) || 'barbell',
     targetReps: e.targetReps ?? e.target ?? 0,
     targetSets: e.targetSets ?? (e.sets || []).length,
     sets: (e.sets || []).map((s) => ({ ...s })),
@@ -126,6 +120,13 @@ export const migrate = (raw) => {
   const base = {
     ...seed,
     ...raw,
+    gym: {
+      ...GYM_DEFAULT,
+      ...(raw.gym || {}),
+      bars: raw.gym?.bars || GYM_DEFAULT.bars,
+      platesKg: raw.gym?.platesKg || GYM_DEFAULT.platesKg,
+      platesLb: raw.gym?.platesLb || GYM_DEFAULT.platesLb,
+    },
     themeMode: raw.themeMode || 'dark',
     profile: {
       ...PROFILE_DEFAULT,
@@ -145,6 +146,7 @@ export const migrate = (raw) => {
       group: e.group || 'Otro',
       equipment: e.equipment || 'Otro',
       type: e.type || 'aislamiento',
+      loadType: e.loadType || defaultLoadType(e.equipment || 'Otro', e.id),
       muscles: Array.isArray(e.muscles) ? e.muscles : (e.muscles ? [String(e.muscles)] : []),
       met: Number(e.met) || 3.5,
       metCode: e.metCode || '02054',
@@ -156,7 +158,7 @@ export const migrate = (raw) => {
       exercises: (w.exercises || []).map(normalizeWorkoutExercise),
     }))
     .sort((a, b) => (b.date || 0) - (a.date || 0));
-  return rescoreWorkouts({ ...base, schemaVersion: 4, routines, customExercises, workouts });
+  return rescoreWorkouts({ ...base, schemaVersion: 5, routines, customExercises, workouts, gym: base.gym });
 };
 
 const Ctx = createContext();
@@ -243,14 +245,14 @@ export function StoreProvider({ children }) {
         apply(merged);
         saveCopy(merged);
         const staleScores = (raw.workouts || []).some((w) => !w.score || Number(w.score.v) !== 4);
-        if (raw.schemaVersion !== 4 || staleScores) AsyncStorage.setItem(KEY, JSON.stringify(merged)).catch(() => {});
+        if (raw.schemaVersion !== 5 || staleScores) AsyncStorage.setItem(KEY, JSON.stringify(merged)).catch(() => {});
       })
       .catch(() => {}).finally(() => { if (alive) setReady(true); });
     return () => { alive = false; };
   }, []);
   const update = (fn) => {
     const n = fn(ref.current);
-    const next = { ...n, schemaVersion: 4 };
+    const next = { ...n, schemaVersion: 5 };
     ref.current = next;
     setData(next);
     const text = JSON.stringify(next);

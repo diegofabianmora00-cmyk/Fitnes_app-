@@ -11,6 +11,7 @@ import { COACH_TONES } from '../coachMemory';
 import ProfileSetup from './ProfileSetup';
 import CustomExerciseModal from '../CustomExerciseModal';
 import RuleInfo from '../RuleInfo';
+import { GYM_DEFAULT } from '../load';
 
 export default function Settings() {
   const { data, update } = useStore();
@@ -20,6 +21,8 @@ export default function Settings() {
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState('');
   const [showRules, setShowRules] = useState(false);
+  const [showEditWorkout, setShowEditWorkout] = useState(false);
+  const [editingWorkout, setEditingWorkout] = useState(null);
 
   const p = data.profile || {};
   const customExercises = data.customExercises || [];
@@ -121,6 +124,94 @@ export default function Settings() {
                 <T style={{ fontWeight: '700', color: data.unit === u ? C.accentText : C.mute }}>{u.toUpperCase()}</T>
               </Press>
             ))}
+          </View>
+        </Card>
+      </FadeIn>
+
+      {/* Mi gimnasio */}
+      <FadeIn delay={120}>
+        <Card style={{ marginTop: 14 }}>
+          <T style={{ fontSize: 12, fontWeight: '600', color: C.mute, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 10 }}>
+            Mi gimnasio y equipo
+          </T>
+          <T mute style={{ fontSize: 13, marginBottom: 12 }}>Configura barras disponibles, discos, escalones de mancuernas y máquinas.</T>
+          
+          <View style={{ gap: 12 }}>
+            <View style={{ backgroundColor: C.card2, borderRadius: 14, padding: 12 }}>
+              <T style={{ fontSize: 14, fontWeight: '700', marginBottom: 8 }}>Barras disponibles</T>
+              {(data.gym?.bars || GYM_DEFAULT.bars).map((bar, idx) => (
+                <View key={bar.id || idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <Field
+                    value={bar.name}
+                    onChangeText={(txt) => {
+                      const bars = [...(data.gym?.bars || GYM_DEFAULT.bars)];
+                      bars[idx].name = txt;
+                      update(d => ({ ...d, gym: { ...(d.gym || GYM_DEFAULT), bars } }));
+                    }}
+                    style={{ flex: 2, height: 40, fontSize: 13, backgroundColor: C.field }}
+                  />
+                  <Field
+                    value={String(bar.weightKg)}
+                    onChangeText={(txt) => {
+                      const w = parseFloat(txt) || 0;
+                      const bars = [...(data.gym?.bars || GYM_DEFAULT.bars)];
+                      bars[idx].weightKg = w;
+                      update(d => ({ ...d, gym: { ...(d.gym || GYM_DEFAULT), bars } }));
+                    }}
+                    keyboardType="numeric"
+                    style={{ flex: 1, height: 40, fontSize: 13, backgroundColor: C.field }}
+                    placeholder="kg"
+                  />
+                  <T mute style={{ fontSize: 12 }}>kg</T>
+                </View>
+              ))}
+            </View>
+
+            <View style={{ backgroundColor: C.card2, borderRadius: 14, padding: 12 }}>
+              <T style={{ fontSize: 14, fontWeight: '700', marginBottom: 6 }}>Discos disponibles ({data.unit || 'kg'})</T>
+              <T mute style={{ fontSize: 12, marginBottom: 8 }}>Discos estándar considerados para los cálculos.</T>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {((data.unit || 'kg') === 'lb' ? (data.gym?.platesLb || GYM_DEFAULT.platesLb) : (data.gym?.platesKg || GYM_DEFAULT.platesKg)).map((plate, pIdx) => (
+                  <View key={pIdx} style={{ backgroundColor: C.accentDim, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: C.accent }}>
+                    <T style={{ fontSize: 13, fontWeight: '700', color: C.accent }}>{plate} {data.unit || 'kg'}</T>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <View style={{ flex: 1, backgroundColor: C.card2, borderRadius: 14, padding: 12 }}>
+                <T style={{ fontSize: 13, fontWeight: '700', marginBottom: 4 }}>Escalón mancuernas</T>
+                <Field
+                  value={String(data.gym?.dumbbellStep || 1)}
+                  onChangeText={(txt) => {
+                    const step = parseFloat(txt) || 1;
+                    update(d => ({ ...d, gym: { ...(d.gym || GYM_DEFAULT), dumbbellStep: step } }));
+                  }}
+                  keyboardType="numeric"
+                  style={{ height: 40, fontSize: 14, backgroundColor: C.field }}
+                />
+              </View>
+              <View style={{ flex: 1, backgroundColor: C.card2, borderRadius: 14, padding: 12 }}>
+                <T style={{ fontSize: 13, fontWeight: '700', marginBottom: 4 }}>Escalón selector (stack)</T>
+                <Field
+                  value={String(data.gym?.stackStep || 5)}
+                  onChangeText={(txt) => {
+                    const step = parseFloat(txt) || 5;
+                    update(d => ({ ...d, gym: { ...(d.gym || GYM_DEFAULT), stackStep: step } }));
+                  }}
+                  keyboardType="numeric"
+                  style={{ height: 40, fontSize: 14, backgroundColor: C.field }}
+                />
+              </View>
+            </View>
+
+            <Btn
+              kind="ghost"
+              label="Restaurar valores por defecto"
+              onPress={() => update(d => ({ ...d, gym: { ...GYM_DEFAULT } }))}
+              style={{ borderColor: C.line }}
+            />
           </View>
         </Card>
       </FadeIn>
@@ -327,6 +418,18 @@ export default function Settings() {
             <View style={{ gap: 8 }}>
               <Btn kind="ghost" label="Simular datos dañados" onPress={simulateCorrupt} />
               
+              <Btn
+                kind="ghost"
+                label="✏️ Corregir / editar sesión de ejercicio"
+                onPress={() => {
+                  if (!data.workouts || data.workouts.length === 0) {
+                    Alert.alert('Sin historial', 'No hay sesiones registradas en el historial para editar.');
+                    return;
+                  }
+                  setShowEditWorkout(true);
+                }}
+              />
+              
               <Btn kind="ghost" label="Cargar historial de prueba" onPress={() => {
                 const buttons = DEV_SEEDS.map((s) => ({
                   text: s.label,
@@ -475,6 +578,139 @@ export default function Settings() {
 
       {/* Modal de reglas y fuentes */}
       <RuleInfo visible={showRules} rules={Object.values(RULES)} onClose={() => setShowRules(false)} title="Ciencia y Reglas de Fitness Coach" />
+
+      {/* Modal: Editar sesión de ejercicio */}
+      <Modal visible={showEditWorkout} transparent animationType="slide" onRequestClose={() => { setShowEditWorkout(false); setEditingWorkout(null); }}>
+        <View style={{ flex: 1, backgroundColor: '#00000099', justifyContent: 'flex-end' }}>
+          <View style={{ maxHeight: '90%', backgroundColor: C.bg, borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingTop: 16, paddingBottom: 24, paddingHorizontal: 22 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <T style={{ fontSize: 20, fontWeight: '700' }}>
+                {editingWorkout ? 'Editar Sesión' : 'Seleccionar Sesión a Editar'}
+              </T>
+              <Press onPress={() => { setShowEditWorkout(false); setEditingWorkout(null); }} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: C.card2, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="close" size={22} color={C.text} />
+              </Press>
+            </View>
+
+            <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
+              {!editingWorkout ? (
+                !(data.workouts || []).length ? (
+                  <Card><T mute>No hay sesiones registradas.</T></Card>
+                ) : (
+                  (data.workouts || []).map((w) => (
+                    <Card key={w.id} style={{ marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <T style={{ fontSize: 16, fontWeight: '700' }}>{w.routineName || 'Entrenamiento'}</T>
+                        <T mute style={{ fontSize: 12 }}>{new Date(w.date || Date.now()).toLocaleDateString()}</T>
+                      </View>
+                      <T mute style={{ fontSize: 13, marginBottom: 10 }}>
+                        {w.exercises ? w.exercises.reduce((acc, ex) => acc + (ex.sets || []).length, 0) : 0} series · Puntuación: {w.score?.score || '—'}
+                      </T>
+                      <Btn
+                        kind="ghost"
+                        label="Seleccionar para editar"
+                        onPress={() => setEditingWorkout(JSON.parse(JSON.stringify(w)))}
+                        style={{ minHeight: 40 }}
+                      />
+                    </Card>
+                  ))
+                )
+              ) : (
+                <View>
+                  <T style={{ fontSize: 14, fontWeight: '700', marginBottom: 6 }}>Comentario de la sesión</T>
+                  <Field
+                    value={editingWorkout.comment || ''}
+                    onChangeText={(txt) => setEditingWorkout({ ...editingWorkout, comment: txt })}
+                    placeholder="Notas o comentario..."
+                    style={{ backgroundColor: C.field, borderRadius: 12, padding: 10, marginBottom: 16, color: C.text }}
+                  />
+
+                  <T style={{ fontSize: 16, fontWeight: '700', marginBottom: 10 }}>Ejercicios y Series</T>
+                  {(editingWorkout.exercises || []).map((ex, exIdx) => (
+                    <Card key={ex.exId || exIdx} style={{ marginBottom: 12 }}>
+                      <T style={{ fontSize: 15, fontWeight: '700', marginBottom: 8, color: C.accent }}>{ex.name}</T>
+                      {(ex.sets || []).map((s, sIdx) => (
+                        <View key={sIdx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                          <T mute style={{ width: 44, fontSize: 12 }}>Serie {sIdx + 1}</T>
+                          <View style={{ flex: 1 }}>
+                            <T mute style={{ fontSize: 10, marginBottom: 2 }}>Peso ({data.unit})</T>
+                            <Field
+                              value={String(s.w ?? '')}
+                              onChangeText={(val) => {
+                                const nextExs = [...editingWorkout.exercises];
+                                nextExs[exIdx].sets[sIdx].w = val;
+                                setEditingWorkout({ ...editingWorkout, exercises: nextExs });
+                              }}
+                              keyboardType="numeric"
+                              style={{ backgroundColor: C.field, borderRadius: 10, padding: 6, fontSize: 14, color: C.text }}
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <T mute style={{ fontSize: 10, marginBottom: 2 }}>Reps</T>
+                            <Field
+                              value={String(s.r ?? '')}
+                              onChangeText={(val) => {
+                                const nextExs = [...editingWorkout.exercises];
+                                nextExs[exIdx].sets[sIdx].r = val;
+                                setEditingWorkout({ ...editingWorkout, exercises: nextExs });
+                              }}
+                              keyboardType="numeric"
+                              style={{ backgroundColor: C.field, borderRadius: 10, padding: 6, fontSize: 14, color: C.text }}
+                            />
+                          </View>
+                        </View>
+                      ))}
+                    </Card>
+                  ))}
+
+                  <View style={{ gap: 10, marginTop: 10 }}>
+                    <Btn
+                      label="Guardar cambios"
+                      onPress={() => {
+                        const updatedWorkouts = (data.workouts || []).map((w) => w.id === editingWorkout.id ? editingWorkout : w);
+                        update((d) => migrate({ ...d, workouts: updatedWorkouts }));
+                        setShowEditWorkout(false);
+                        setEditingWorkout(null);
+                        Alert.alert('Actualizado', 'La sesión de ejercicio se ha corregido y los récords se han recalculado.');
+                      }}
+                    />
+                    <Btn
+                      kind="ghost"
+                      label="Eliminar esta sesión"
+                      onPress={() => {
+                        Alert.alert(
+                          'Eliminar sesión',
+                          '¿Estás seguro de eliminar esta sesión del historial?',
+                          [
+                            { text: 'Cancelar', style: 'cancel' },
+                            {
+                              text: 'Eliminar',
+                              style: 'destructive',
+                              onPress: () => {
+                                const updatedWorkouts = (data.workouts || []).filter((w) => w.id !== editingWorkout.id);
+                                update((d) => migrate({ ...d, workouts: updatedWorkouts }));
+                                setShowEditWorkout(false);
+                                setEditingWorkout(null);
+                                Alert.alert('Eliminado', 'La sesión fue eliminada del historial.');
+                              }
+                            }
+                          ]
+                        );
+                      }}
+                      style={{ borderColor: C.danger }}
+                    />
+                    <Btn
+                      kind="ghost"
+                      label="Volver a la lista"
+                      onPress={() => setEditingWorkout(null)}
+                    />
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }

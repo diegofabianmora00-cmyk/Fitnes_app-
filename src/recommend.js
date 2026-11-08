@@ -548,6 +548,7 @@ export function recommendFor(data = {}, ex = {}) {
     exerciseName: name,
     type,
     group,
+    loadType: ex.loadType || (db && db.loadType) || 'barbell',
     target: baseTarget,
     targetReps: baseTarget,
     unit,

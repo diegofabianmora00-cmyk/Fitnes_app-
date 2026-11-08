@@ -67,7 +67,6 @@ export default function HistoryList({ data }) {
         directionalLockEnabled={true}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ gap: 8, marginBottom: 14 }}
-        onTouchStart={(e) => e.stopPropagation()}
       >
         {FILTERS.map((f) => {
           const on = filter === f;

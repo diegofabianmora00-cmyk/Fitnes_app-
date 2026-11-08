@@ -6,6 +6,15 @@ import { Btn, Card, Field, Press, T } from './ui';
 import { GROUPS } from './exercises';
 import { useStore, uid } from './store';
 
+const LOAD_TYPE_OPTIONS = [
+  { id: 'barbell', label: 'Barra con discos', example: '60 kg = barra 20 + 2 × 20' },
+  { id: 'dumbbell', label: 'Mancuerna (por mano)', example: '20 kg = mancuerna 20' },
+  { id: 'stack', label: 'Máquina de selector', example: '50 kg = placa 50' },
+  { id: 'plates', label: 'Máquina de discos', example: '100 kg = carro 40 + 2 × 30' },
+  { id: 'bodyweight', label: 'Peso corporal', example: '80 kg = corporal + 10 kg lastre' },
+  { id: 'plain', label: 'Número simple', example: '50 kg directo' },
+];
+
 const EQUIPMENT_OPTIONS = ['Barra', 'Mancuernas', 'Máquina', 'Polea', 'Peso corporal', 'Otro'];
 const TYPE_OPTIONS = [
   { id: 'compuesto', label: 'Compuesto (varias articulaciones)' },
@@ -17,6 +26,7 @@ export default function CustomExerciseModal({ visible, onClose, onCreated }) {
   const [name, setName] = useState('');
   const [group, setGroup] = useState('Pecho');
   const [equipment, setEquipment] = useState('Mancuernas');
+  const [loadType, setLoadType] = useState('barbell');
   const [type, setType] = useState('aislamiento');
   const [muscles, setMuscles] = useState('');
 
@@ -29,6 +39,7 @@ export default function CustomExerciseModal({ visible, onClose, onCreated }) {
       name: name.trim(),
       group: cleanGroup,
       equipment: equipment || 'Mancuernas',
+      loadType: loadType || 'barbell',
       type: type || 'aislamiento',
       muscles: muscles.trim() ? muscles.split(',').map(s => s.trim()).filter(Boolean) : [cleanGroup],
       met: bodyweight ? 3.0 : 3.5,
@@ -106,6 +117,31 @@ export default function CustomExerciseModal({ visible, onClose, onCreated }) {
                     style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, backgroundColor: on ? C.accent : C.card2, borderWidth: 1, borderColor: on ? C.accent : C.line }}
                   >
                     <T style={{ fontSize: 14, fontWeight: '600', color: on ? C.accentText : C.text }}>{eq}</T>
+                  </Press>
+                );
+              })}
+            </View>
+          </Card>
+
+          {/* Tipo de carga */}
+          <Card style={{ marginBottom: 16 }}>
+            <T style={{ fontSize: 12, fontWeight: '600', color: C.mute, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+              Tipo de carga *
+            </T>
+            <View style={{ gap: 8 }}>
+              {LOAD_TYPE_OPTIONS.map(lt => {
+                const on = loadType === lt.id;
+                return (
+                  <Press
+                    key={lt.id}
+                    onPress={() => setLoadType(lt.id)}
+                    style={{ paddingHorizontal: 14, paddingVertical: 12, borderRadius: 14, backgroundColor: on ? C.accentDim : C.card2, borderWidth: 1, borderColor: on ? C.accent : C.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                  >
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <T style={{ fontSize: 15, fontWeight: '600', color: on ? C.accent : C.text }}>{lt.label}</T>
+                      <T mute style={{ fontSize: 12, marginTop: 2 }}>Ej: {lt.example}</T>
+                    </View>
+                    {on && <Ionicons name="checkmark-circle" size={22} color={C.accent} />}
                   </Press>
                 );
               })}

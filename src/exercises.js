@@ -9,6 +9,8 @@
 //
 // Grupo muscular y equipo: clasificación anatómica estándar (sin fuente única).
 
+import { defaultLoadType } from './load';
+
 export const COMPENDIUM =
   'Herrmann et al., 2024. 2024 Adult Compendium of Physical Activities. ' +
   'Journal of Sport and Health Science 13(1):6-12.';
@@ -35,6 +37,7 @@ const make = (id, name, group, equipment, type, muscles, metKey) => {
     equipment,
     type,
     muscles,
+    loadType: defaultLoadType(equipment, id),
     met: m.met,
     metCode: m.code,
     source: `MET: ${COMPENDIUM} (código ${m.code}). Grupo y equipo: clasificación anatómica estándar.`,

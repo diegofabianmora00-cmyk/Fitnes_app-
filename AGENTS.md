@@ -109,6 +109,7 @@ workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName, 
 - Al terminar: tabla tarea | archivos modificados | estado (hecho / parcial / no hecho),
   y la lista de archivos nuevos y modificados para el commit.
 - si algo que se este pidiendo es muy similar a algo que se esta pidiendo otra vez, comunicalo
+- Nunca usar emojis para nada, siempre en lugar de emojis utilizar iconos, ya sea personalizados o creados
 
 ## Estado
 - Hecho: app base, base de ejercicios (79), perfil, motor de recomendación, entrenamiento guiado, calorías, gráficas básicas, pruebas del motor y puntaje (54), rediseño completo de la pestaña Rutinas (+buscador, ejercicios personalizados en data.customExercises, vista de detalle de rutina hecha con descanso, RIR, botón "EDITAR" y reordenamiento de ejercicios con `↑`/`↓`), rediseño completo de la pestaña Progreso (con filtros e historial agrupado por mes), rediseño completo de la pestaña Inicio, puntaje de sesión v4, rediseño completo de la pestaña Ajustes, y Prompt 1 (sistema de tipos de carga: datos, funciones puras, migración a schemaVersion 5 y pruebas unitarias completas).

@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C } from '../theme';
 import { Btn, Card, Press, T } from '../ui';
 import { fromU, KEYS, lastSets, toU, uid, useStore } from '../store';
+import { loadTypeLabels } from '../load';
 import { exerciseById } from '../exercises';
 import { addLoadStep, confidence, exerciseReview, GOALS, labelOf, LEVELS, newRecords, recommendFor, roundLoad, RULES, sessionReview, subLoadStep } from '../recommend';
 import Coach from '../Coach';
@@ -585,7 +586,12 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
                 </View>
               </View>
               <Card style={{ padding: 18, borderRadius: 26 }}>
-                <T style={{ fontSize: 12, fontWeight: '600', color: C.mute, letterSpacing: 1.2 }}>RECOMENDACIÓN</T>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <T style={{ fontSize: 12, fontWeight: '600', color: C.mute, letterSpacing: 1.2 }}>RECOMENDACIÓN</T>
+                  <View style={{ backgroundColor: C.card2, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                    <T style={{ fontSize: 11, fontWeight: '600', color: C.accent }}>{loadTypeLabels[rec.loadType || cur.ex.loadType] || 'Carga'}</T>
+                  </View>
+                </View>
                 {insufficient ? (
                   <View style={{ marginTop: 8 }}>
                     <T style={{ fontSize: 17, fontWeight: '600', color: C.text, lineHeight: 24 }}>La información que tengo no es suficiente como para sugerirte un peso.</T>
@@ -756,9 +762,23 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
                 </View>
               </View>
               <View style={{ backgroundColor: C.card, borderRadius: 26, paddingVertical: 12, paddingHorizontal: 18, borderWidth: 1, borderColor: C.line }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <T style={{ fontSize: 13, color: C.mute }}>Peso ({loadTypeLabels[rec.loadType || cur.ex.loadType] || 'Peso'})</T>
+                  <Press
+                    onPress={() => {
+                      const nextU = u === 'kg' ? 'lb' : 'kg';
+                      const curW = parseFloat(String(reg.w).replace(',', '.')) || 0;
+                      const convertedW = nextU === 'lb' ? curW * 2.20462 : curW / 2.20462;
+                      setReg((p) => ({ ...p, w: curW > 0 ? String(Math.round(convertedW * 10) / 10) : p.w }));
+                      update((d) => ({ ...d, unit: nextU }));
+                    }}
+                    style={{ backgroundColor: C.card2, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}
+                  >
+                    <T style={{ fontSize: 11, fontWeight: '700', color: C.accent }}>⇄ Cambiar a {u === 'kg' ? 'lb' : 'kg'}</T>
+                  </Press>
+                </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                   <View>
-                    <T style={{ fontSize: 13, color: C.mute }}>Peso</T>
                     <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 2 }}>
                       <T style={{ fontSize: 38, fontWeight: '700', letterSpacing: -1.1, fontVariant: ['tabular-nums'], opacity: regConfirmed.w ? 1 : 0.4 }}>{reg.w.toString().replace('.', ',')}</T>
                       <T style={{ fontSize: 16, color: C.mute, fontWeight: '500' }}>{u}</T>

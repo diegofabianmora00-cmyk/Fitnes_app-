@@ -14,6 +14,14 @@ const DAY_NAMES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábad
 const DAY_ABBR = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
 const TODAY_IDX = (new Date().getDay() + 6) % 7;
 const goalLabel = (id) => (GOALS.find((g) => g.id === id) || GOALS[1]).label;
+const ROUTINE_LOAD_TYPES = [
+  { id: 'barbell', label: 'Barra con discos', example: '60 kg = barra 20 + 2 × 20' },
+  { id: 'dumbbell', label: 'Mancuerna (por mano)', example: '20 kg = mancuerna 20' },
+  { id: 'stack', label: 'Máquina de selector', example: '50 kg = placa 50' },
+  { id: 'plates', label: 'Máquina de discos', example: '100 kg = carro 40 + 2 × 30' },
+  { id: 'bodyweight', label: 'Peso corporal', example: '80 kg = corporal + 10 kg lastre' },
+  { id: 'plain', label: 'Número simple', example: '50 kg directo' },
+];
 
 const formatRest = (sec) => {
   const s = Number(sec) || 120;
@@ -581,6 +589,126 @@ function Editor({ routine, onClose }) {
                   ? `Usa los valores de la rutina: ${r.defaults.sets} series × ${r.defaults.reps} reps · ${formatRest(r.defaults.restSec)} · RIR 2. Toca "Personalizado" para cambiarlos solo en este ejercicio.`
                   : 'Ajusta series, repeticiones, descanso y RIR solo para este ejercicio.'}
               </T>
+
+              {/* Tipo de Carga */}
+              <Card style={{ marginBottom: 16 }}>
+                <T style={{ fontSize: 12, fontWeight: '600', color: C.mute, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+                  Tipo de carga
+                </T>
+                <View style={{ gap: 8, marginBottom: 12 }}>
+                  {ROUTINE_LOAD_TYPES.map(lt => {
+                    const currentLoadType = ex.loadType || 'barbell';
+                    const on = currentLoadType === lt.id;
+                    return (
+                      <Press
+                        key={lt.id}
+                        onPress={() => patchEx({ loadType: lt.id })}
+                        style={{ paddingHorizontal: 14, paddingVertical: 12, borderRadius: 14, backgroundColor: on ? C.accentDim : C.card2, borderWidth: 1, borderColor: on ? C.accent : C.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                      >
+                        <View style={{ flex: 1, marginRight: 8 }}>
+                          <T style={{ fontSize: 15, fontWeight: '600', color: on ? C.accent : C.text }}>{lt.label}</T>
+                          <T mute style={{ fontSize: 12, marginTop: 2 }}>Ej: {lt.example}</T>
+                        </View>
+                        {on && <Ionicons name="checkmark-circle" size={22} color={C.accent} />}
+                      </Press>
+                    );
+                  })}
+                </View>
+
+                {/* Subopciones específicas */}
+                {(ex.loadType === 'barbell' || !ex.loadType) && (
+                  <View style={{ marginTop: 8, padding: 12, backgroundColor: C.card2, borderRadius: 12 }}>
+                    <T style={{ fontSize: 13, fontWeight: '600', marginBottom: 6 }}>Barra a utilizar</T>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                      {(data.gym?.bars || [{ id: 'olimpica', name: 'Barra olímpica (20 kg)', weightKg: 20 }]).map(bar => {
+                        const on = (ex.barId || data.gym?.defaultBarId || 'olimpica') === bar.id;
+                        return (
+                          <Press
+                            key={bar.id}
+                            onPress={() => patchEx({ barId: bar.id })}
+                            style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: on ? C.accent : C.bg, borderWidth: 1, borderColor: on ? C.accent : C.line }}
+                          >
+                            <T style={{ fontSize: 12, fontWeight: '600', color: on ? C.accentText : C.text }}>{bar.name}</T>
+                          </Press>
+                        );
+                      })}
+                    </View>
+                  </View>
+                )}
+
+                {ex.loadType === 'dumbbell' && (
+                  <View style={{ marginTop: 8, padding: 12, backgroundColor: C.card2, borderRadius: 12 }}>
+                    <T style={{ fontSize: 13, fontWeight: '600', marginBottom: 6 }}>Modo de mancuerna</T>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      {[
+                        { id: 'single', label: 'Una mancuerna a la vez' },
+                        { id: 'double', label: 'Dos mancuernas' },
+                      ].map(mode => {
+                        const on = (ex.dumbbellMode || 'double') === mode.id;
+                        return (
+                          <Press
+                            key={mode.id}
+                            onPress={() => patchEx({ dumbbellMode: mode.id })}
+                            style={{ flex: 1, padding: 10, borderRadius: 10, backgroundColor: on ? C.accent : C.bg, borderWidth: 1, borderColor: on ? C.accent : C.line, alignItems: 'center' }}
+                          >
+                            <T style={{ fontSize: 12, fontWeight: '600', color: on ? C.accentText : C.text }}>{mode.label}</T>
+                          </Press>
+                        );
+                      })}
+                    </View>
+                  </View>
+                )}
+
+                {ex.loadType === 'plates' && (
+                  <View style={{ marginTop: 8, padding: 12, backgroundColor: C.card2, borderRadius: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <T style={{ fontSize: 13, fontWeight: '600' }}>Contar peso del carro</T>
+                      <Press
+                        onPress={() => patchEx({ countCarriage: !ex.countCarriage, carriageKg: ex.carriageKg ?? 40 })}
+                        style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: ex.countCarriage ? C.accent : C.bg }}
+                      >
+                        <T style={{ fontSize: 12, fontWeight: '700', color: ex.countCarriage ? C.accentText : C.text }}>
+                          {ex.countCarriage ? 'Activado' : 'Desactivado'}
+                        </T>
+                      </Press>
+                    </View>
+                    {ex.countCarriage && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                        <T mute style={{ fontSize: 12 }}>Peso del carro ({data.unit || 'kg'}):</T>
+                        <Field
+                          value={String(ex.carriageKg ?? 40)}
+                          onChangeText={(val) => patchEx({ carriageKg: parseFloat(val) || 0 })}
+                          keyboardType="numeric"
+                          style={{ width: 80, height: 36, backgroundColor: C.bg, borderRadius: 8, paddingHorizontal: 8, fontSize: 14 }}
+                        />
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {ex.loadType === 'bodyweight' && (
+                  <View style={{ marginTop: 8, padding: 12, backgroundColor: C.card2, borderRadius: 12 }}>
+                    <T style={{ fontSize: 13, fontWeight: '600', marginBottom: 6 }}>Modalidad</T>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      {[
+                        { id: 'weighted', label: 'Con lastre' },
+                        { id: 'assisted', label: 'Con asistencia' },
+                      ].map(mode => {
+                        const on = (ex.bwMode || 'weighted') === mode.id;
+                        return (
+                          <Press
+                            key={mode.id}
+                            onPress={() => patchEx({ bwMode: mode.id })}
+                            style={{ flex: 1, padding: 10, borderRadius: 10, backgroundColor: on ? C.accent : C.bg, borderWidth: 1, borderColor: on ? C.accent : C.line, alignItems: 'center' }}
+                          >
+                            <T style={{ fontSize: 12, fontWeight: '600', color: on ? C.accentText : C.text }}>{mode.label}</T>
+                          </Press>
+                        );
+                      })}
+                    </View>
+                  </View>
+                )}
+              </Card>
 
               {/* Series */}
               <Card style={{ marginBottom: 12, opacity: isManual ? 1 : 0.5 }}>

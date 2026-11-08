@@ -46,7 +46,6 @@ export default function PeriodPicker({ period, setPeriod, customRange, setCustom
         onContentSizeChange={(w) => setContentWidth(w)}
         onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
         scrollEventThrottle={16}
-        onTouchStart={(e) => e.stopPropagation()}
       >
         {OPTIONS.map((opt) => {
           const on = period === opt;

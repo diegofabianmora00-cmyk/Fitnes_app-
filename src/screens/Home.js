@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { Modal, ScrollView, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C } from '../theme';
 import { Btn, Card, FadeIn, H, Press, T } from '../ui';
@@ -20,6 +20,7 @@ export default function Home({ go, start, isActive }) {
   const { data, update } = useStore();
   const [why, setWhy] = useState(null);
   const [coachMsg, setCoachMsg] = useState(null);
+  const [showPicker, setShowPicker] = useState(false);
   const lastIdRef = useRef(null);
 
   useEffect(() => {
@@ -90,7 +91,7 @@ export default function Home({ go, start, isActive }) {
       {alreadyTrainedToday ? (
         <FadeIn delay={250}>
           <Card style={{ marginTop: 14, backgroundColor: C.accentDim, borderColor: C.accent, borderWidth: 1, padding: 18 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
               <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' }}>
                 <Ionicons name="checkmark" size={26} color={C.accentText} />
               </View>
@@ -99,6 +100,7 @@ export default function Home({ go, start, isActive }) {
                 <T style={{ fontSize: 14, marginTop: 2, color: C.text }}>Ya cumpliste con tu sesión de entrenamiento del día.</T>
               </View>
             </View>
+            <Btn kind="ghost" label="Entrenar otra rutina de todos modos..." onPress={() => setShowPicker(true)} style={{ minHeight: 44 }} />
           </Card>
         </FadeIn>
       ) : todaysRoutine ? (
@@ -106,7 +108,7 @@ export default function Home({ go, start, isActive }) {
           <Card style={{ marginTop: 14, padding: 18 }}>
             <T mute>Tu rutina de hoy</T>
             <T style={{ fontSize: 22, fontWeight: '700', marginTop: 2 }}>{todaysRoutine.name}</T>
-            <T mute style={{ marginTop: 4 }}>
+            <T mute style={{ marginTop: 4, marginBottom: 16 }}>
               {todaysRoutine.exercises.length} ejercicios · ~{Math.max(1, Math.round(todaysRoutine.exercises.reduce((acc, ex) => {
                 const manual = ex.mode === 'manual';
                 const sets = manual ? (Number(ex.sets) || todaysRoutine.defaults?.sets || 3) : (todaysRoutine.defaults?.sets || 3);
@@ -114,12 +116,24 @@ export default function Home({ go, start, isActive }) {
                 return acc + sets * rest;
               }, 0) / 60))} min
             </T>
-            <Btn label="Empezar entrenamiento" onPress={() => start(todaysRoutine)} style={{ marginTop: 16, minHeight: 56, borderRadius: 24 }} />
+            <View style={{ gap: 10 }}>
+              <Btn label="🚀 Iniciar" onPress={() => start(todaysRoutine)} style={{ minHeight: 52, borderRadius: 20 }} />
+              <Btn kind="ghost" label="Elegir otra rutina de la semana..." onPress={() => setShowPicker(true)} style={{ minHeight: 44, borderRadius: 16 }} />
+            </View>
           </Card>
         </FadeIn>
       ) : (
         <>
           <FadeIn delay={250}>
+            <Card style={{ marginTop: 14, padding: 18, backgroundColor: C.card, borderColor: C.accent, borderWidth: 1 }}>
+              <T mute>Día de descanso o sin rutina asignada</T>
+              <T style={{ fontSize: 20, fontWeight: '700', marginTop: 2, marginBottom: 8 }}>¿Listo para entrenar hoy?</T>
+              <T mute style={{ fontSize: 13, marginBottom: 16 }}>Puedes iniciar cualquier rutina de tu semana cuando quieras.</T>
+              <Btn label="🚀 Iniciar entrenamiento" onPress={() => setShowPicker(true)} style={{ minHeight: 50, borderRadius: 20 }} />
+            </Card>
+          </FadeIn>
+
+          <FadeIn delay={280}>
             <TodayGoal
               nextRoutineInfo={nextRoutineInfo}
               checkin={checkin}
@@ -127,7 +141,7 @@ export default function Home({ go, start, isActive }) {
             />
           </FadeIn>
 
-          <FadeIn delay={300}>
+          <FadeIn delay={320}>
             <TomorrowCard
               data={data}
               nextRoutineInfo={nextRoutineInfo}
@@ -135,7 +149,7 @@ export default function Home({ go, start, isActive }) {
             />
           </FadeIn>
 
-          <FadeIn delay={350}>
+          <FadeIn delay={360}>
             <NearRecordCard recordInfo={recordInfo} unit={unit} />
           </FadeIn>
 
@@ -168,6 +182,51 @@ export default function Home({ go, start, isActive }) {
       )}
     </ScrollView>
     <RuleInfo visible={!!why} rules={why || []} onClose={() => setWhy(null)} />
+
+    {/* Modal para elegir rutina */}
+    <Modal visible={showPicker} transparent animationType="slide" onRequestClose={() => setShowPicker(false)}>
+      <View style={{ flex: 1, backgroundColor: '#00000099', justifyContent: 'flex-end' }}>
+        <View style={{ maxHeight: '80%', backgroundColor: C.bg, borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingTop: 16, paddingBottom: 24, paddingHorizontal: 22 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <T style={{ fontSize: 20, fontWeight: '700' }}>Seleccionar Rutina</T>
+            <Press onPress={() => setShowPicker(false)} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: C.card2, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="close" size={22} color={C.text} />
+            </Press>
+          </View>
+          <T mute style={{ fontSize: 13, marginBottom: 14 }}>Elige cualquier rutina guardada para iniciar tu sesión:</T>
+          <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
+            {(!data.routines || data.routines.length === 0) ? (
+              <Card style={{ padding: 16, alignItems: 'center' }}>
+                <T mute style={{ textAlign: 'center', marginBottom: 12 }}>No tienes rutinas creadas todavía.</T>
+                <Btn label="Crear rutina" onPress={() => { setShowPicker(false); go('routines'); }} />
+              </Card>
+            ) : (
+              data.routines.map((r) => (
+                <Card key={r.id} style={{ marginBottom: 12, padding: 16 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <T style={{ fontSize: 17, fontWeight: '700' }}>{r.name}</T>
+                    {r.days && r.days.includes(dayIndex) && (
+                      <View style={{ backgroundColor: C.accentDim, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 }}>
+                        <T style={{ fontSize: 11, fontWeight: '700', color: C.accent }}>Hoy</T>
+                      </View>
+                    )}
+                  </View>
+                  <T mute style={{ fontSize: 13, marginBottom: 12 }}>{r.exercises.length} ejercicios · Objetivo: {r.goal}</T>
+                  <Btn
+                    label="Iniciar esta rutina"
+                    onPress={() => {
+                      setShowPicker(false);
+                      start(r);
+                    }}
+                    style={{ minHeight: 44, borderRadius: 16 }}
+                  />
+                </Card>
+              ))
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
     </>
   );
 }

@@ -6,7 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import { C } from './src/theme';
-import { Press, T } from './src/ui';
+import { Btn, Card, FadeIn, Press, T } from './src/ui';
+import Coach from './src/Coach';
 import { KEYS, StoreProvider, useStore } from './src/store';
 import Home from './src/screens/Home';
 import Routines from './src/screens/Routines';
@@ -80,6 +81,47 @@ function AnimatedTabIcon({ name, active, id }) {
   );
 }
 
+function AppIntroScreen({ visible, onDismiss, isNewUser }) {
+  useEffect(() => {
+    if (!isNewUser && visible) {
+      const t = setTimeout(() => {
+        onDismiss();
+      }, 1800);
+      return () => clearTimeout(t);
+    }
+  }, [visible, isNewUser]);
+
+  if (!visible) return null;
+
+  return (
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: C.bg, zIndex: 9999, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <FadeIn style={{ alignItems: 'center', width: '100%', maxWidth: 340 }}>
+        <View style={{ width: 88, height: 88, borderRadius: 28, backgroundColor: C.accentDim, borderWidth: 1, borderColor: C.accent, alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+          <Coach mood="happy" size="sm" />
+        </View>
+        <T style={{ fontSize: 26, fontWeight: '800', color: C.text, textAlign: 'center', marginBottom: 4 }}>Fitness Coach</T>
+        <T mute style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: 1.5, textAlign: 'center', marginBottom: 22 }}>Hecho por Diego Fabian</T>
+
+        <Card style={{ padding: 18, marginBottom: 28, backgroundColor: C.card2, borderWidth: 1, borderColor: C.line }}>
+          <T style={{ fontSize: 15, lineHeight: 22, color: C.text, textAlign: 'center' }}>
+            Tu entrenador virtual inteligente que decide tu peso, repeticiones y descanso basándose en ciencia, tus récords y tu RIR (esfuerzo real). Atlas lee tu historial y te avisa cuándo subir. Tú solo concéntrate en levantar.
+          </T>
+        </Card>
+
+        {isNewUser ? (
+          <Btn
+            label="Comenzar configuración"
+            onPress={onDismiss}
+            style={{ width: '100%' }}
+          />
+        ) : (
+          <T mute style={{ fontSize: 13, textAlign: 'center' }}>Cargando aplicación...</T>
+        )}
+      </FadeIn>
+    </View>
+  );
+}
+
 function Shell() {
   const { ready, data } = useStore();
   const ins = useSafeAreaInsets();
@@ -87,6 +129,7 @@ function Shell() {
   const [tab, setTab] = useState('home');
   const [routine, setRoutine] = useState(null);
   const [draft, setDraft] = useState(null);
+  const [showIntro, setShowIntro] = useState(true);
   const workoutBackRef = useRef(null);
   const scrollRef = useRef(null);
   const edgeVibrationRef = useRef({ left: false, right: false });
@@ -213,7 +256,8 @@ function Shell() {
         </View>
       </View>
       {routine && <Workout routine={routine} draft={draft} workoutBackRef={workoutBackRef} onClose={() => { setRoutine(null); setDraft(null); }} />}
-      {!data.profile?.completed && <ProfileSetup />}
+      {!data.profile?.completed && !showIntro && <ProfileSetup />}
+      <AppIntroScreen visible={showIntro || !ready} onDismiss={() => setShowIntro(false)} isNewUser={!data.profile?.completed} />
     </View>
   );
 }

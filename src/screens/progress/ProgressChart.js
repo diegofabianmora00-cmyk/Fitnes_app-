@@ -104,7 +104,6 @@ export default function ProgressChart({ data, rango, stats, selectedExId, setSel
         onContentSizeChange={(w) => setContentWidth(w)}
         onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
         scrollEventThrottle={16}
-        onTouchStart={(e) => e.stopPropagation()}
       >
         {METRICS.map((m) => {
           const on = metric === m;
