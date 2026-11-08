@@ -289,10 +289,10 @@ function Editor({ routine, onClose }) {
 
         {/* STEP 2: EJERCICIOS */}
         {step === 'ejercicios' && (
-          <View style={{ flex: 1, paddingTop: 56 }}>
-            {/* Header Card */}
-            <View style={{ paddingHorizontal: 22, marginBottom: 12 }}>
-              <Card>
+          <View style={{ flex: 1 }}>
+            <ScrollView contentContainerStyle={{ padding: 22, paddingTop: 56, paddingBottom: 140 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              {/* Header Card */}
+              <Card style={{ marginBottom: 12 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <View style={{ flex: 1, marginRight: 12 }}>
                     <H style={{ fontSize: 20, fontWeight: '700' }}>Elige ejercicios</H>
@@ -308,8 +308,74 @@ function Editor({ routine, onClose }) {
                 </View>
               </Card>
 
+              {/* Selected Exercises / Order Management */}
+              {r.exercises.length > 0 && (
+                <Card style={{ marginBottom: 12, paddingVertical: 12, paddingHorizontal: 16 }}>
+                  <T style={{ fontSize: 12, fontWeight: '600', color: C.mute, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+                    Orden de ejercicios ({r.exercises.length})
+                  </T>
+                  {r.exercises.map((ex, exIdx) => (
+                    <View key={`${ex.id}-${exIdx}`} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: exIdx < r.exercises.length - 1 ? 1 : 0, borderColor: C.line }}>
+                      <T style={{ fontSize: 13, fontWeight: '700', color: C.mute, width: 24 }}>{exIdx + 1}.</T>
+                      <T numberOfLines={1} style={{ fontSize: 14, fontWeight: '700', flex: 1, marginRight: 8 }}>{ex.name}</T>
+                      
+                      {/* Reorder Buttons */}
+                      <View style={{ flexDirection: 'row', gap: 4, marginRight: 8 }}>
+                        <Press
+                          disabled={exIdx === 0}
+                          onPress={() => {
+                            const list = [...r.exercises];
+                            const temp = list[exIdx];
+                            list[exIdx] = list[exIdx - 1];
+                            list[exIdx - 1] = temp;
+                            updateField('exercises', list);
+                          }}
+                          style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: exIdx === 0 ? C.card2 : C.card, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center', opacity: exIdx === 0 ? 0.4 : 1 }}
+                          accessibilityLabel="Mover arriba"
+                        >
+                          <T style={{ fontSize: 14, fontWeight: '700' }}>↑</T>
+                        </Press>
+                        <Press
+                          disabled={exIdx === r.exercises.length - 1}
+                          onPress={() => {
+                            const list = [...r.exercises];
+                            const temp = list[exIdx];
+                            list[exIdx] = list[exIdx + 1];
+                            list[exIdx + 1] = temp;
+                            updateField('exercises', list);
+                          }}
+                          style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: exIdx === r.exercises.length - 1 ? C.card2 : C.card, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center', opacity: exIdx === r.exercises.length - 1 ? 0.4 : 1 }}
+                          accessibilityLabel="Mover abajo"
+                        >
+                          <T style={{ fontSize: 14, fontWeight: '700' }}>↓</T>
+                        </Press>
+                      </View>
+
+                      {/* Configure / Remove */}
+                      <Press
+                        onPress={() => {
+                          setConfigIdx(exIdx);
+                          setStep('config');
+                        }}
+                        style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center', marginRight: 4 }}
+                        accessibilityLabel="Configurar ejercicio"
+                      >
+                        <Ionicons name="settings-outline" size={14} color={C.text} />
+                      </Press>
+                      <Press
+                        onPress={() => toggleExercise(ex)}
+                        style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: C.card, borderWidth: 1, borderColor: C.danger, alignItems: 'center', justifyContent: 'center' }}
+                        accessibilityLabel="Quitar ejercicio"
+                      >
+                        <Ionicons name="close" size={14} color={C.danger} />
+                      </Press>
+                    </View>
+                  ))}
+                </Card>
+              )}
+
               {/* Search */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.card2, borderRadius: 14, paddingHorizontal: 12, marginTop: 12, borderWidth: 1, borderColor: C.line }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.card2, borderRadius: 14, paddingHorizontal: 12, marginBottom: 12, borderWidth: 1, borderColor: C.line }}>
                 <Ionicons name="search" size={18} color={C.mute} />
                 <Field
                   value={query}
@@ -326,7 +392,7 @@ function Editor({ routine, onClose }) {
               </View>
 
               {/* Muscle Group Horizontal Chips */}
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }} contentContainerStyle={{ gap: 8 }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }} contentContainerStyle={{ gap: 8 }}>
                 {GROUPS.map(g => {
                   const on = activeGroup === g;
                   return (
@@ -349,22 +415,18 @@ function Editor({ routine, onClose }) {
               {/* Create custom exercise */}
               <Press
                 onPress={() => setCustomModal(true)}
-                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10, paddingVertical: 12, borderRadius: 14, backgroundColor: C.accentDim, borderWidth: 1, borderColor: C.accent }}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 16, paddingVertical: 12, borderRadius: 14, backgroundColor: C.accentDim, borderWidth: 1, borderColor: C.accent }}
               >
                 <Ionicons name="add-circle" size={20} color={C.accent} />
                 <T style={{ fontSize: 14, fontWeight: '700', color: C.accent }}>Crear ejercicio personalizado</T>
               </Press>
-            </View>
 
-            {/* Section label */}
-            <View style={{ paddingHorizontal: 22, marginTop: 6, marginBottom: 6 }}>
-              <T mute style={{ fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1.2 }}>
+              {/* Section label */}
+              <T mute style={{ fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 8 }}>
                 {activeGroup} · {groupExercises.length} ejercicios
               </T>
-            </View>
 
-            {/* Scrollable Exercises List */}
-            <ScrollView contentContainerStyle={{ paddingHorizontal: 22, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+              {/* Exercises Catalog List */}
               {groupExercises.map(item => {
                 const sel = isSelectedExercise(item.id);
                 const exObj = r.exercises.find(e => e.id === item.id);
@@ -647,8 +709,137 @@ function Editor({ routine, onClose }) {
   );
 }
 
+function RoutineDetail({ routine, onClose, onEdit, onDelete }) {
+  const estSec = routine.exercises.reduce((acc, ex) => {
+    const manual = ex.mode === 'manual';
+    const sets = manual ? (Number(ex.sets) || routine.defaults?.sets || 3) : (routine.defaults?.sets || 3);
+    const rest = manual ? (Number(ex.restSec) || routine.defaults?.restSec || 120) : (routine.defaults?.restSec || 120);
+    return acc + sets * rest;
+  }, 0);
+  const estMin = Math.max(1, Math.round(estSec / 60));
+
+  const daysStr = routine.days && routine.days.length > 0
+    ? routine.days.map(d => DAY_NAMES[d]).join(', ')
+    : 'Ningún día asignado';
+
+  return (
+    <Modal animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: C.bg }}>
+        <ScrollView contentContainerStyle={{ padding: 22, paddingTop: 56, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+          {/* Header Card */}
+          <Card style={{ marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <H style={{ fontSize: 22, fontWeight: '800' }}>{routine.name}</H>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 8 }}>
+                  <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: C.accentDim, borderWidth: 1, borderColor: C.accent }}>
+                    <T style={{ fontSize: 11, fontWeight: '700', color: C.accent }}>{goalLabel(routine.goal)}</T>
+                  </View>
+                  <T mute style={{ fontSize: 13 }}>~{estMin} min · {routine.exercises.length} {routine.exercises.length === 1 ? 'ejercicio' : 'ejercicios'}</T>
+                </View>
+              </View>
+              <Press
+                onPress={onClose}
+                style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: C.card2, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' }}
+                accessibilityLabel="Cerrar"
+              >
+                <T style={{ fontSize: 16, fontWeight: '700' }}>✕</T>
+              </Press>
+            </View>
+
+            <View style={{ marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderColor: C.line }}>
+              <T mute style={{ fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Días asignados</T>
+              <T style={{ fontSize: 14, fontWeight: '600' }}>{daysStr}</T>
+            </View>
+
+            <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderColor: C.line }}>
+              <T mute style={{ fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Valores por defecto</T>
+              <T style={{ fontSize: 14, fontWeight: '600' }}>
+                {routine.defaults?.sets || 3} series × {routine.defaults?.reps || 10} reps · {formatRest(routine.defaults?.restSec || 120)} descanso · RIR 2
+              </T>
+            </View>
+          </Card>
+
+          {/* Section Title */}
+          <T mute style={{ fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 10 }}>
+            Ejercicios de la rutina ({routine.exercises.length})
+          </T>
+
+          {/* Exercises List */}
+          {routine.exercises.map((ex, idx) => {
+            const isManual = ex.mode === 'manual';
+            const sets = isManual ? ex.sets : (routine.defaults?.sets || 3);
+            const reps = isManual ? (ex.reps || routine.defaults?.reps || 10) : (routine.defaults?.reps || 10);
+            const rest = isManual ? (ex.restSec || routine.defaults?.restSec || 120) : (routine.defaults?.restSec || 120);
+            const rir = isManual ? (ex.rir !== undefined ? ex.rir : 2) : 2;
+
+            const rirText = rir === 0 ? 'Al fallo' : `RIR ${rir}`;
+
+            return (
+              <Card key={`${ex.id}-${idx}`} style={{ marginBottom: 10, paddingVertical: 12, paddingHorizontal: 16 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                  <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: C.card2, alignItems: 'center', justifyContent: 'center', marginRight: 10, marginTop: 2 }}>
+                    <T style={{ fontSize: 12, fontWeight: '700', color: C.mute }}>{idx + 1}</T>
+                  </View>
+                  <View style={{ flex: 1, marginRight: 10 }}>
+                    <T style={{ fontSize: 16, fontWeight: '700' }}>{ex.name}</T>
+                    <T mute style={{ fontSize: 13, marginTop: 2 }}>
+                      {ex.equipment || 'Equipamiento'} · {sets} series × {reps} reps
+                    </T>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                      <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, backgroundColor: C.card2, borderWidth: 1, borderColor: C.line }}>
+                        <T mute style={{ fontSize: 11, fontWeight: '600' }}>⏱ {formatRest(rest)}</T>
+                      </View>
+                      <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, backgroundColor: C.card2, borderWidth: 1, borderColor: C.line }}>
+                        <T mute style={{ fontSize: 11, fontWeight: '600' }}>🎯 {rirText}</T>
+                      </View>
+                      {isManual && (
+                        <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: C.accentDim }}>
+                          <T style={{ fontSize: 10, fontWeight: '700', color: C.accent }}>CUSTOM</T>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                </View>
+              </Card>
+            );
+          })}
+
+          {routine.exercises.length === 0 && (
+            <Card style={{ padding: 24, alignItems: 'center' }}>
+              <T mute style={{ textAlign: 'center' }}>Esta rutina no tiene ejercicios.</T>
+            </Card>
+          )}
+
+          {/* Action Buttons */}
+          <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+            <Btn
+              kind="ghost"
+              label="Eliminar"
+              onPress={() => {
+                onClose();
+                onDelete(routine);
+              }}
+              style={{ flex: 1, minHeight: 52, borderRadius: 20, backgroundColor: C.card2, borderWidth: 1, borderColor: C.line }}
+            />
+            <Btn
+              label="EDITAR"
+              onPress={() => {
+                onClose();
+                onEdit(routine);
+              }}
+              style={{ flex: 2, minHeight: 52, borderRadius: 20 }}
+            />
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
 export default function Routines({ start }) {
   const { data, update } = useStore();
+  const [selectedRoutine, setSelectedRoutine] = useState(null);
   const [editingRoutine, setEditingRoutine] = useState(null);
 
   const activeDaysCount = [0,1,2,3,4,5,6].filter(d => routinesForDay(data, d).length > 0).length;
@@ -728,7 +919,7 @@ export default function Routines({ start }) {
                 return (
                   <Card key={`${r.id}-${dIdx}`} style={{ marginBottom: 12, paddingVertical: 14, paddingHorizontal: 18 }}>
                     <Press
-                      onPress={() => setEditingRoutine(r)}
+                      onPress={() => setSelectedRoutine(r)}
                       style={{ flexDirection: 'row', alignItems: 'center' }}
                     >
                       {/* Day Abbr Box */}
@@ -786,6 +977,14 @@ export default function Routines({ start }) {
           style={{ marginTop: 8, minHeight: 56, borderRadius: 24, backgroundColor: C.card2, borderWidth: 1, borderColor: C.line }}
         />
 
+        {selectedRoutine && (
+          <RoutineDetail
+            routine={selectedRoutine}
+            onClose={() => setSelectedRoutine(null)}
+            onEdit={(r) => setEditingRoutine(r)}
+            onDelete={del}
+          />
+        )}
         {editingRoutine && <Editor routine={editingRoutine} onClose={() => setEditingRoutine(null)} />}
       </FadeIn>
     </ScrollView>

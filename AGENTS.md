@@ -23,7 +23,8 @@ no los crees ni los edites.
   exerciseReview, rescoreWorkouts, routineScores, weekSummary y coachMessage.
 - src/Coach.js: Atlas animado. COACH (apariencia) y Coach({ mood, size }):
   mood neutral | happy | alert; size 'sm' | 'lg'.
-- src/exercises.js: COMPENDIUM, METS, exercises (79), GROUPS, exerciseById,
+- src/load.js: sistema de tipos de carga y lógica pura de cálculo (totalFromInputs, plateBreakdown, nearestLoadable, volumeFactor, GYM_DEFAULT).
+- src/exercises.js: COMPENDIUM, METS, exercises (79 con loadType), GROUPS, exerciseById,
   filterExercises, registerCustomExercises, kcalPerHour.
 - src/ExercisePicker.js: selector con buscador (props: visible, onClose, onSelect, selectedId).
 - src/CustomExerciseModal.js: modal para crear un ejercicio propio (nombre, grupo y
@@ -41,6 +42,7 @@ no los crees ni los edites.
 - src/Settings.js: kg/lb, editar perfil, exportar, borrar datos.
 - src/coachMemory.js: cerebro de los mensajes de Atlas (lógica pura y plantillas).
 - jest.config.js: preset 'jest-expo' para pruebas.
+- src/__tests__/load.test.js: pruebas unitarias de tipos de carga, cálculos, desglose de discos, pesos armables, factor de volumen y migración (jest).
 - src/__tests__/recommend.test.js: pruebas unitarias del motor puro (jest).
 - src/__tests__/scoring.test.js: pruebas del puntaje de sesión v3, recalculo y puntaje por rutina (jest).
 - src/__tests__/coachMemory.test.js: pruebas unitarias del cerebro de mensajes de Atlas (jest).
@@ -56,22 +58,23 @@ Claves de AsyncStorage:
 - fitnesscoach:v1:backup: respaldo legado; solo se usa como segunda opción al restaurar.
 - fitnesscoach:v1:draft: borrador del entreno en curso (rutina, inicio, series y posición);
   se borra al terminar o descartar.
-data = { schemaVersion: 4, unit, checkin: { date, level },
+data = { schemaVersion: 5, unit, gym: { bars, defaultBarId, platesKg, platesLb, dumbbellStep, stackStep, carriageKg, countCarriage }, checkin: { date, level },
 profile: { goal, environment, ambition, level, daysPerWeek, weightKg, heightCm, age, sex,
   activityLevel, jointFocus, restStyle, tone, completed, updatedAt },
 coachMemory: [string], // últimos 8 ids de mensajes mostrados por Atlas
-customExercises: [{ id, name, group, equipment, type, muscles, met, metCode, source, custom }], // ejercicios creados por el usuario; se mezclan con exercises de src/exercises.js
-routines: [{ id, name, goal, days: [0..6], defaults: { sets, reps, restSec }, exercises: [{ id, name, group, equipment, sets, reps, mode, rir, restSec }] }], // mode 'default' usa defaults de la rutina; 'manual' usa sets/reps/restSec/rir propios
+customExercises: [{ id, name, group, equipment, type, muscles, loadType, met, metCode, source, custom }], // ejercicios creados por el usuario; se mezclan con exercises de src/exercises.js
+routines: [{ id, name, goal, days: [0..6], defaults: { sets, reps, restSec }, exercises: [{ id, name, group, equipment, loadType, sets, reps, mode, rir, restSec }] }], // mode 'default' usa defaults de la rutina; 'manual' usa sets/reps/restSec/rir próprios
 workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName, comment,
   adjusted: { reason }, // opcional: cansancio, dolor, poco tiempo, mal sueño
   prs: [{ exId, name, kind, weightKg, reps }],
-  plan: [{ exId, name, group, type, targetReps, targetSets, targetRestSec, targetRir, recWeightKg }], // foto del plan al terminar; incluye ejercicios saltados
+  plan: [{ exId, name, group, type, loadType, targetReps, targetSets, targetRestSec, targetRir, recWeightKg }], // foto del plan al terminar; incluye ejercicios saltados
   score: { score, grade, components: [{ key, label, value, weight }], restNotes, durationSec, v: 4, partial, missed: [{ exId, name }], adjusted },
-  exercises: [{ exId, name, targetReps, targetSets, targetRestSec, recWeightKg,
+  exercises: [{ exId, name, loadType, targetReps, targetSets, targetRestSec, recWeightKg,
     sets: [{ w, r, rir, failure, startedAt, endedAt, restBeforeSec, pr,
       confirmed: { r, w, rir }, unconfirmed }] }] }] }
 // sets sin `unconfirmed` son datos viejos válidos; `unconfirmed: true` los excluye de
-// motor, PR y puntaje. Pesos en kg; unit ausente se lee como kg.
+// motor, PR y puntaje. Pesos en kg; unit ausente se lee como kg. `w` guardado se conserva intacto en la migración a schemaVersion 5.
+// `schemaVersion` 5: añade `gym` y `loadType` ('barbell' | 'dumbbell' | 'stack' | 'plates' | 'bodyweight' | 'plain') a ejercicios del catálogo y personalizados.
 // `score.v` 4: pesos adaptativos según nivel (principiante vs intermedio), ajuste intencional (`adjusted`), tolerancia al descanso asimétrica (exceso penaliza menos), mínimo de 1 serie confirmada. `partial` marca sesiones viejas sin plan completo.
 // workouts: el más reciente primero. El id del ejercicio es el de src/exercises.js.
 
@@ -108,7 +111,6 @@ workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName, 
 - si algo que se este pidiendo es muy similar a algo que se esta pidiendo otra vez, comunicalo
 
 ## Estado
-- Hecho: app base, base de ejercicios (79), perfil, motor de recomendación, entrenamiento
-  guiado, calorías, gráficas básicas, pruebas del motor y puntaje (54), rediseño completo de la pestaña Rutinas (+buscador, ejercicios personalizados en data.customExercises), rediseño completo de la pestaña Progreso (con filtros e historial agrupado por mes), rediseño completo de la pestaña Inicio, puntaje de sesión v4, y rediseño completo de la pestaña Ajustes (modo oscuro y claro, salud y enfoque articular, gestión de ejercicios personalizados, importación y exportación de respaldos JSON, estilo de descanso y herramientas funcionales).
+- Hecho: app base, base de ejercicios (79), perfil, motor de recomendación, entrenamiento guiado, calorías, gráficas básicas, pruebas del motor y puntaje (54), rediseño completo de la pestaña Rutinas (+buscador, ejercicios personalizados en data.customExercises, vista de detalle de rutina hecha con descanso, RIR, botón "EDITAR" y reordenamiento de ejercicios con `↑`/`↓`), rediseño completo de la pestaña Progreso (con filtros e historial agrupado por mes), rediseño completo de la pestaña Inicio, puntaje de sesión v4, rediseño completo de la pestaña Ajustes, y Prompt 1 (sistema de tipos de carga: datos, funciones puras, migración a schemaVersion 5 y pruebas unitarias completas).
 - Por confirmar: ninguno (tipografía Inter en H y Btn confirmada y cargada correctamente con expo-google-fonts).
 - Pendiente: ninguno (prototipo completo y pulido).
