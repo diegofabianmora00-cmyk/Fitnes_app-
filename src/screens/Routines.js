@@ -1063,13 +1063,13 @@ export default function Routines({ start }) {
                       </View>
                       {/* Center Info */}
                       <View style={{ flex: 1, marginRight: 10 }}>
-                        <T numberOfLines={1} style={{ fontSize: 16, fontWeight: '700' }}>{r.name}</T>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3, gap: 8 }}>
-                          <T mute style={{ fontSize: 13 }}>{r.exercises.length} ejercicios · ~{estMin} min</T>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <T numberOfLines={1} style={{ flexShrink: 1, fontSize: 16, fontWeight: '700' }}>{r.name}</T>
                           <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 7, backgroundColor: C.card2, borderWidth: 1, borderColor: C.line }}>
                             <T mute style={{ fontSize: 10, fontWeight: '600' }}>{goalLabel(r.goal)}</T>
                           </View>
                         </View>
+                        <T mute style={{ fontSize: 13, marginTop: 3 }}>{r.exercises.length} ejercicios · ~{estMin} min</T>
                       </View>
                       {/* Right Chevron & delete */}
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
