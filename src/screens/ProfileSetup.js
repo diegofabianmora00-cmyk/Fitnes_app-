@@ -26,7 +26,7 @@ function Option({ selected, onPress, icon, title, desc }) {
       }}
     >
       <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: selected ? C.accent : C.card2, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-        <Ionicons name={icon} size={22} color={selected ? '#06120D' : C.mute} />
+        <Ionicons name={icon} size={22} color={selected ? C.accentText : C.mute} />
       </View>
       <View style={{ flex: 1 }}>
         <T style={{ fontSize: 16, fontWeight: '700' }}>{title}</T>

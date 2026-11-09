@@ -65,7 +65,7 @@ export const H = ({ children, style }) => (
   <Text style={[{ color: C.text, fontSize: 30, fontWeight: '700', letterSpacing: -0.6, fontFamily: 'Inter_700Bold' }, style]}>{children}</Text>
 );
 export const Btn = ({ label, onPress, kind, style, disabled, icon, iconRight }) => {
-  const color = kind === 'ghost' ? C.text : '#06120D';
+  const color = kind === 'ghost' ? C.text : C.accentText;
   return (
     <Press disabled={disabled} onPress={onPress} style={[{ backgroundColor: kind === 'ghost' ? C.card2 : C.accent, minHeight: 48, justifyContent: 'center', paddingVertical: 15, paddingHorizontal: 18, borderRadius: 16, alignItems: 'center' }, disabled && { opacity: 0.45 }, style]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, maxWidth: '100%' }}>

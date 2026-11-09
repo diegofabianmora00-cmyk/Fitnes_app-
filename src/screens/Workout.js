@@ -226,6 +226,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
 
   const cur = log[exIndex];
   const rec = cur.rec;
+  const isLast = exIndex === log.length - 1;
   const totalSets = cur.ex.sets;
   const completedSets = cur.sets.filter((s) => s.done).length;
   const effectiveWeightKg = rec.weightKg;
@@ -538,8 +539,8 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
 
   if (phase === 'recommend') {
     const conf = confidence(data, cur.ex.id);
-    const insufficient = rec.sessions === 0 || (rec.weightKg == null && !bodyweight);
     const bodyweight = rec.weightKg === 0;
+    const insufficient = rec.sessions === 0 || (rec.weightKg == null && !bodyweight);
     const rirTarget = Array.isArray(rec.rir) ? (rec.rir[1] ?? rec.rir[0] ?? 2) : 2;
     const rirStart = (4 - rirTarget) * 19.5;
     const goalLabel = labelOf(GOALS, data.profile && data.profile.goal);
@@ -667,7 +668,9 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
                 <Ring progress={0} center={
                   <LinearGradient colors={[C.gradPlay0, C.gradPlay1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ width: 112, height: 112, borderRadius: 56, alignItems: 'center', justifyContent: 'center' }}>
                     <Press onPress={() => startRunning(setIndex)} style={{ width: 112, height: 112, borderRadius: 56, alignItems: 'center', justifyContent: 'center' }}>
-                      <Ionicons name="play" size={46} color={C.playTriangle} />
+                      <View style={{ width: 112, height: 112, alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name="play" size={46} color={C.playTriangle} />
+                      </View>
                     </Press>
                   </LinearGradient>
                 } />
@@ -888,7 +891,6 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
       return `≈ ${Math.round(kcal)} kcal estimadas (MET × peso × horas).`;
     })();
     const finalText = sumCoachMsg || (sc && sc.score >= 75 ? 'Cumpliste con margen.' : (sc && sc.score >= 60 ? 'Aceptable.' : 'A revisar el ritmo.'));
-    const isLast = exIndex === log.length - 1;
     return (
       <Animated.View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, transform: [{ translateY: y }] }}>
         <LinearGradient colors={[C.bgTop, C.bgBot]} locations={[0, 0.38]} style={{ flex: 1, ...commonPad }}>
