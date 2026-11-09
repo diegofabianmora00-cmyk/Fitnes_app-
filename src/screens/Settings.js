@@ -84,8 +84,8 @@ export default function Settings() {
           <T mute style={{ fontSize: 13, marginBottom: 12 }}>Elige entre el modo oscuro clásico o el modo claro.</T>
           <View style={{ flexDirection: 'row', backgroundColor: C.card2, borderRadius: 14, padding: 4 }}>
             {[
-              { id: 'dark', label: '🌙 Oscuro' },
-              { id: 'light', label: '☀️ Claro' },
+              { id: 'dark', label: 'Oscuro', icon: 'moon' },
+              { id: 'light', label: 'Claro', icon: 'sunny' },
             ].map((m) => {
               const on = (data.themeMode || 'dark') === m.id;
               return (
@@ -97,7 +97,10 @@ export default function Settings() {
                     borderRadius: 11, alignItems: 'center', backgroundColor: on ? C.accent : 'transparent',
                   }}
                 >
-                  <T style={{ fontWeight: '700', color: on ? C.accentText : C.mute }}>{m.label}</T>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name={m.icon} size={16} color={on ? C.accentText : C.mute} />
+                    <T style={{ fontWeight: '700', color: on ? C.accentText : C.mute }}>{m.label}</T>
+                  </View>
                 </Press>
               );
             })}
@@ -340,7 +343,8 @@ export default function Settings() {
           </T>
           <View style={{ flexDirection: 'row', gap: 10 }}>
             <Btn
-              label="+ Crear ejercicio"
+              icon="add"
+              label="Crear ejercicio"
               onPress={() => setShowCreateEx(true)}
               style={{ flex: 1, minHeight: 46, borderRadius: 14 }}
             />
@@ -365,12 +369,14 @@ export default function Settings() {
           <View style={{ gap: 10 }}>
             <Btn
               kind="ghost"
-              label="📥 Exportar copia de seguridad (JSON)"
+              icon="share-outline"
+              label="Exportar copia de seguridad (JSON)"
               onPress={() => Share.share({ message: JSON.stringify(data, null, 2) })}
             />
             <Btn
               kind="ghost"
-              label="📤 Importar / Restaurar datos (JSON)"
+              icon="cloud-download-outline"
+              label="Importar / Restaurar datos (JSON)"
               onPress={() => setShowImport(true)}
             />
             <Btn
@@ -401,7 +407,8 @@ export default function Settings() {
           </T>
           <Btn
             kind="ghost"
-            label="🧬 Ver reglas y fuentes científicas"
+            icon="flask-outline"
+            label="Ver reglas y fuentes científicas"
             onPress={() => setShowRules(true)}
           />
         </Card>
@@ -420,7 +427,8 @@ export default function Settings() {
               
               <Btn
                 kind="ghost"
-                label="✏️ Corregir / editar sesión de ejercicio"
+                icon="create-outline"
+                label="Corregir / editar sesión de ejercicio"
                 onPress={() => {
                   if (!data.workouts || data.workouts.length === 0) {
                     Alert.alert('Sin historial', 'No hay sesiones registradas en el historial para editar.');
@@ -465,7 +473,8 @@ export default function Settings() {
 
               <Btn
                 kind="ghost"
-                label="⚡ Reiniciar app desde cero"
+                icon="warning-outline"
+                label="Reiniciar app desde cero"
                 onPress={() => {
                   Alert.alert(
                     'Reiniciar desde cero',

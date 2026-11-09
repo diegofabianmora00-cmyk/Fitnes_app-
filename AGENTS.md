@@ -110,8 +110,13 @@ workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName, 
   y la lista de archivos nuevos y modificados para el commit.
 - si algo que se este pidiendo es muy similar a algo que se esta pidiendo otra vez, comunicalo
 - Nunca usar emojis para nada, siempre en lugar de emojis utilizar iconos, ya sea personalizados o creados
+- La app se abre con Expo Go en el emulador, con la dirección exp://10.0.2.2:8081
+  (por ejemplo: adb shell am start -a android.intent.action.VIEW -d "exp://10.0.2.2:8081").
+  Nunca abras la dirección http://10.0.2.2:8081 en el navegador: solo muestra un texto.
+  Si la app no abre, detente y avísame; no intentes instalar ni configurar cosas por tu cuenta.
 
 ## Estado
 - Hecho: app base, base de ejercicios (79), perfil, motor de recomendación, entrenamiento guiado, calorías, gráficas básicas, pruebas del motor y puntaje (54), rediseño completo de la pestaña Rutinas (+buscador, ejercicios personalizados en data.customExercises, vista de detalle de rutina hecha con descanso, RIR, botón "EDITAR" y reordenamiento de ejercicios con `↑`/`↓`), rediseño completo de la pestaña Progreso (con filtros e historial agrupado por mes), rediseño completo de la pestaña Inicio, puntaje de sesión v4, rediseño completo de la pestaña Ajustes, y Prompt 1 (sistema de tipos de carga: datos, funciones puras, migración a schemaVersion 5 y pruebas unitarias completas).
+- Hecho (último paso): scroll vertical en Progreso (también en su estado vacío), animaciones de gráfica, barras y anillos de puntaje, y sustitución de todos los emojis por iconos de Ionicons (Btn ahora acepta `icon`/`iconRight`).
 - Por confirmar: ninguno (tipografía Inter en H y Btn confirmada y cargada correctamente con expo-google-fonts).
 - Pendiente: ninguno (prototipo completo y pulido).

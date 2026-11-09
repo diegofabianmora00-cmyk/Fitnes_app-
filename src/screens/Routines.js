@@ -283,11 +283,12 @@ function Editor({ routine, onClose }) {
                 style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: C.card2, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' }}
                 accessibilityLabel="Volver"
               >
-                <T style={{ fontSize: 20, fontWeight: '700' }}>←</T>
+                <Ionicons name="arrow-back" size={22} color={C.text} />
               </Press>
               <Btn
                 disabled={!r.name.trim() || r.days.length === 0}
-                label="Siguiente →"
+                label="Siguiente"
+                iconRight="arrow-forward"
                 onPress={() => setStep('ejercicios')}
                 style={{ flex: 1, minHeight: 56, borderRadius: 24 }}
               />
@@ -341,7 +342,7 @@ function Editor({ routine, onClose }) {
                           style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: exIdx === 0 ? C.card2 : C.card, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center', opacity: exIdx === 0 ? 0.4 : 1 }}
                           accessibilityLabel="Mover arriba"
                         >
-                          <T style={{ fontSize: 14, fontWeight: '700' }}>↑</T>
+                          <Ionicons name="chevron-up" size={16} color={C.text} />
                         </Press>
                         <Press
                           disabled={exIdx === r.exercises.length - 1}
@@ -355,7 +356,7 @@ function Editor({ routine, onClose }) {
                           style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: exIdx === r.exercises.length - 1 ? C.card2 : C.card, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center', opacity: exIdx === r.exercises.length - 1 ? 0.4 : 1 }}
                           accessibilityLabel="Mover abajo"
                         >
-                          <T style={{ fontSize: 14, fontWeight: '700' }}>↓</T>
+                          <Ionicons name="chevron-down" size={16} color={C.text} />
                         </Press>
                       </View>
 
@@ -486,7 +487,11 @@ function Editor({ routine, onClose }) {
                       }}
                       accessibilityLabel={sel ? "Quitar ejercicio" : "Añadir ejercicio"}
                     >
-                      <T style={{ fontSize: 16, fontWeight: '700', color: sel ? C.accentText : C.mute }}>{sel ? '✓' : '+'}</T>
+                      {sel ? (
+                        <Ionicons name="checkmark" size={20} color={C.accentText} />
+                      ) : (
+                        <Ionicons name="add" size={20} color={C.mute} />
+                      )}
                     </Press>
                   </Press>
                 );
@@ -510,7 +515,7 @@ function Editor({ routine, onClose }) {
                   style={{ width: 56, height: 56, borderRadius: 24, backgroundColor: C.card2, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' }}
                   accessibilityLabel="Volver a datos"
                 >
-                  <T style={{ fontSize: 20, fontWeight: '700' }}>←</T>
+                  <Ionicons name="arrow-back" size={22} color={C.text} />
                 </Press>
                 <Btn
                   disabled={r.exercises.length === 0}
@@ -791,7 +796,7 @@ function Editor({ routine, onClose }) {
                   style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: C.card2, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' }}
                   accessibilityLabel="Volver"
                 >
-                  <T style={{ fontSize: 20, fontWeight: '700' }}>←</T>
+                  <Ionicons name="arrow-back" size={22} color={C.text} />
                 </Press>
                 <Btn
                   label="Listo"
@@ -871,7 +876,7 @@ function RoutineDetail({ routine, onClose, onEdit, onDelete }) {
                 style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: C.card2, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' }}
                 accessibilityLabel="Cerrar"
               >
-                <T style={{ fontSize: 16, fontWeight: '700' }}>✕</T>
+                <Ionicons name="close" size={20} color={C.text} />
               </Press>
             </View>
 
@@ -915,11 +920,13 @@ function RoutineDetail({ routine, onClose, onEdit, onDelete }) {
                       {ex.equipment || 'Equipamiento'} · {sets} series × {reps} reps
                     </T>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                      <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, backgroundColor: C.card2, borderWidth: 1, borderColor: C.line }}>
-                        <T mute style={{ fontSize: 11, fontWeight: '600' }}>⏱ {formatRest(rest)}</T>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, backgroundColor: C.card2, borderWidth: 1, borderColor: C.line }}>
+                        <Ionicons name="timer-outline" size={12} color={C.mute} />
+                        <T mute style={{ fontSize: 11, fontWeight: '600' }}>{formatRest(rest)}</T>
                       </View>
-                      <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, backgroundColor: C.card2, borderWidth: 1, borderColor: C.line }}>
-                        <T mute style={{ fontSize: 11, fontWeight: '600' }}>🎯 {rirText}</T>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, backgroundColor: C.card2, borderWidth: 1, borderColor: C.line }}>
+                        <Ionicons name="locate-outline" size={12} color={C.mute} />
+                        <T mute style={{ fontSize: 11, fontWeight: '600' }}>{rirText}</T>
                       </View>
                       {isManual && (
                         <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: C.accentDim }}>
@@ -1069,7 +1076,7 @@ export default function Routines({ start }) {
                         <Press onPress={() => del(r)} style={{ padding: 6 }}>
                           <Ionicons name="trash-outline" size={18} color={C.danger} />
                         </Press>
-                        <T mute style={{ fontSize: 18, fontWeight: '600' }}>›</T>
+                        <Ionicons name="chevron-forward" size={18} color={C.mute} />
                       </View>
                     </Press>
                   </Card>

@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, ScrollView, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
 import { C } from '../../theme';
 import { Card, Press, T, Btn } from '../../ui';
 import { sessionProgress } from '../../recommend';
 import SessionDetail from './SessionDetail';
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 const FILTERS = ['Todas', 'Con comentario', 'Con récord'];
 
@@ -18,6 +20,42 @@ const formatDay = (ms) => {
 };
 
 const clockMin = (sec) => `${Math.floor((sec || 0) / 60)} min`;
+
+function ScoreRing({ value }) {
+  const r = 20;
+  const circ = 2 * Math.PI * r;
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    anim.setValue(0);
+    Animated.timing(anim, { toValue: 1, duration: 800, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  }, [value]);
+
+  const offset = anim.interpolate({ inputRange: [0, 1], outputRange: [circ, circ - (value / 100) * circ] });
+
+  return (
+    <View style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width="48" height="48">
+        <Circle cx="24" cy="24" r={r} stroke={C.line} strokeWidth="3" fill="none" />
+        <AnimatedCircle
+          cx="24"
+          cy="24"
+          r={r}
+          stroke={C.accent}
+          strokeWidth="3"
+          fill="none"
+          strokeDasharray={circ}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          transform="rotate(-90 24 24)"
+        />
+      </Svg>
+      <View style={{ position: 'absolute' }}>
+        <T style={{ fontSize: 15, fontWeight: '800', color: C.accent }}>{value}</T>
+      </View>
+    </View>
+  );
+}
 
 export default function HistoryList({ data }) {
   const workouts = data.workouts || [];
@@ -138,11 +176,6 @@ export default function HistoryList({ data }) {
             const subtitle = `${clockMin(w.durationSec)} · ${(w.exercises || []).length} ejercicios${avanceStr ? ` · ${avanceStr}` : ''}`;
             const scoreVal = w.score?.score || 0;
 
-            // Score circle SVG
-            const r = 20;
-            const circ = 2 * Math.PI * r;
-            const offset = circ - (scoreVal / 100) * circ;
-
             return (
               <Card key={w.id} style={{ padding: 16 }}>
                 <Press onPress={() => handlePressCard(w, false)} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -158,26 +191,7 @@ export default function HistoryList({ data }) {
                   </View>
 
                   {/* Score circle 48x48 */}
-                  <View style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
-                    <Svg width="48" height="48">
-                      <Circle cx="24" cy="24" r={r} stroke={C.line} strokeWidth="3" fill="none" />
-                      <Circle
-                        cx="24"
-                        cy="24"
-                        r={r}
-                        stroke={C.accent}
-                        strokeWidth="3"
-                        fill="none"
-                        strokeDasharray={circ}
-                        strokeDashoffset={offset}
-                        strokeLinecap="round"
-                        transform="rotate(-90 24 24)"
-                      />
-                    </Svg>
-                    <View style={{ position: 'absolute' }}>
-                      <T style={{ fontSize: 15, fontWeight: '800', color: C.accent }}>{scoreVal}</T>
-                    </View>
-                  </View>
+                  <ScoreRing value={scoreVal} />
                 </Press>
 
                 {/* Separator and comment / add comment */}

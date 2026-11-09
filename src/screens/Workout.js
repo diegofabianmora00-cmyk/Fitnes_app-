@@ -774,7 +774,10 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
                     }}
                     style={{ backgroundColor: C.card2, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}
                   >
-                    <T style={{ fontSize: 11, fontWeight: '700', color: C.accent }}>⇄ Cambiar a {u === 'kg' ? 'lb' : 'kg'}</T>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Ionicons name="swap-horizontal" size={13} color={C.accent} />
+                      <T style={{ fontSize: 11, fontWeight: '700', color: C.accent }}>Cambiar a {u === 'kg' ? 'lb' : 'kg'}</T>
+                    </View>
                   </Press>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -815,9 +818,9 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
               <View style={{ flex: 1 }} />
               <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
                 <Press onPress={backRegister} style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
-                  <T style={{ fontSize: 22, color: C.text }}>←</T>
+                  <Ionicons name="arrow-back" size={24} color={C.text} />
                 </Press>
-                <Btn label="Guardar serie →" onPress={saveRegister} style={{ flex: 1 }} />
+                <Btn label="Guardar serie" iconRight="arrow-forward" onPress={saveRegister} style={{ flex: 1 }} />
               </View>
             </View>
           </ScrollView>

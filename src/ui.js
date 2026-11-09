@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Pressable, Text, TextInput, View } from 'react-native';
+import { Animated, Easing, Pressable, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { C } from './theme';
 
 export function Press({ onPress, onLongPress, style, children, disabled, hitSlop }) {
@@ -33,10 +34,10 @@ export function Press({ onPress, onLongPress, style, children, disabled, hitSlop
 export function FadeIn({ children, delay = 0, style }) {
   const v = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.timing(v, { toValue: 1, duration: 380, delay, useNativeDriver: true }).start();
+    Animated.timing(v, { toValue: 1, duration: 420, delay, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
   }, []);
   return (
-    <Animated.View style={[style, { opacity: v, transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }]}>
+    <Animated.View style={[style, { opacity: v, transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }] }]}>
       {children}
     </Animated.View>
   );
@@ -63,11 +64,18 @@ export const T = ({ style, mute, children, ...p }) => {
 export const H = ({ children, style }) => (
   <Text style={[{ color: C.text, fontSize: 30, fontWeight: '700', letterSpacing: -0.6, fontFamily: 'Inter_700Bold' }, style]}>{children}</Text>
 );
-export const Btn = ({ label, onPress, kind, style, disabled }) => (
-  <Press disabled={disabled} onPress={onPress} style={[{ backgroundColor: kind === 'ghost' ? C.card2 : C.accent, minHeight: 48, justifyContent: 'center', paddingVertical: 15, paddingHorizontal: 18, borderRadius: 16, alignItems: 'center' }, disabled && { opacity: 0.45 }, style]}>
-    <Text style={{ color: kind === 'ghost' ? C.text : '#06120D', fontWeight: '700', fontSize: 16, fontFamily: 'Inter_700Bold' }}>{label}</Text>
-  </Press>
-);
+export const Btn = ({ label, onPress, kind, style, disabled, icon, iconRight }) => {
+  const color = kind === 'ghost' ? C.text : '#06120D';
+  return (
+    <Press disabled={disabled} onPress={onPress} style={[{ backgroundColor: kind === 'ghost' ? C.card2 : C.accent, minHeight: 48, justifyContent: 'center', paddingVertical: 15, paddingHorizontal: 18, borderRadius: 16, alignItems: 'center' }, disabled && { opacity: 0.45 }, style]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, maxWidth: '100%' }}>
+        {icon ? <Ionicons name={icon} size={18} color={color} /> : null}
+        <Text style={{ color, fontWeight: '700', fontSize: 16, fontFamily: 'Inter_700Bold', flexShrink: 1, textAlign: 'center' }}>{label}</Text>
+        {iconRight ? <Ionicons name={iconRight} size={18} color={color} /> : null}
+      </View>
+    </Press>
+  );
+};
 export const Field = ({ style, ...p }) => (
   <TextInput placeholderTextColor={C.mute} selectionColor={C.accent}
     style={[{ backgroundColor: C.card2, color: C.text, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, fontSize: 16, fontFamily: 'Inter_400Regular' }, style]} {...p} />

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Line, Text as SvgText } from 'react-native-svg';
 import { C } from '../../theme';
@@ -14,7 +14,12 @@ export default function EmptyProgress({ onStartWorkout, onGoRoutines }) {
   const chartH = height - 40;
 
   return (
-    <View style={{ flex: 1, padding: 22 }}>
+    <ScrollView
+      style={{ flex: 1, width: '100%' }}
+      contentContainerStyle={{ padding: 22, paddingBottom: 40 }}
+      showsVerticalScrollIndicator={false}
+      nestedScrollEnabled
+    >
       <FadeIn><H>Progreso</H></FadeIn>
       <FadeIn delay={60}><T mute style={{ fontSize: 14, marginTop: 2 }}>Aún no hay datos</T></FadeIn>
 
@@ -89,9 +94,9 @@ export default function EmptyProgress({ onStartWorkout, onGoRoutines }) {
         </Card>
       </FadeIn>
 
-      <View style={{ flex: 1, justifyContent: 'flex-end', marginTop: 24 }}>
-        <Btn label="Empezar a entrenar" onPress={onStartWorkout || onGoRoutines} />
+      <View style={{ marginTop: 24 }}>
+        <Btn label="Empezar a entrenar" icon="play" onPress={onStartWorkout || onGoRoutines} />
       </View>
-    </View>
+    </ScrollView>
   );
 }

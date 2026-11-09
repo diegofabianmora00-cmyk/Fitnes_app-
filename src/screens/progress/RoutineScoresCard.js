@@ -1,5 +1,5 @@
-import React from 'react';
-import { View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Easing, View } from 'react-native';
 import { C } from '../../theme';
 import { Card, T } from '../../ui';
 import { routineScores, movingAverage4w } from '../../recommend';
@@ -14,6 +14,13 @@ const trendInfo = (trend) => {
 export default function RoutineScoresCard({ data }) {
   const routines = routineScores(data);
   const movAvg = movingAverage4w(data);
+  const grow = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    grow.setValue(0);
+    Animated.timing(grow, { toValue: 1, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  }, [routines.length]);
+
   if (!routines.length) return null;
 
   return (
@@ -61,7 +68,14 @@ export default function RoutineScoresCard({ data }) {
                   <T style={{ fontSize: 11, fontWeight: '700' }}>{r.consistency}%</T>
                 </View>
                 <View style={{ height: 6, borderRadius: 3, backgroundColor: C.track, overflow: 'hidden' }}>
-                  <View style={{ height: 6, borderRadius: 3, width: `${r.consistency}%`, backgroundColor: C.accent }} />
+                  <Animated.View
+                    style={{
+                      height: 6,
+                      borderRadius: 3,
+                      backgroundColor: C.accent,
+                      width: grow.interpolate({ inputRange: [0, 1], outputRange: ['0%', `${r.consistency}%`] }),
+                    }}
+                  />
                 </View>
               </View>
             )}

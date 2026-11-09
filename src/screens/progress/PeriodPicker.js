@@ -95,7 +95,7 @@ export default function PeriodPicker({ period, setPeriod, customRange, setCustom
           </T>
         </Press>
 
-        <T mute style={{ fontSize: 16 }}>→</T>
+        <Ionicons name="arrow-forward" size={16} color={C.muteText} />
 
         <Press
           onPress={() => period === 'Personalizado' && setShowModal(true)}

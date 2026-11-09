@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, ScrollView } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, View, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Circle, Line, Text as SvgText, Polygon } from 'react-native-svg';
 import { C } from '../../theme';
@@ -8,12 +8,16 @@ import ExercisePicker from '../../ExercisePicker';
 import { progressSeries } from '../../recommend';
 import { exerciseById } from '../../exercises';
 
+const AnimatedPath = Animated.createAnimatedComponent(Path);
+const AnimatedPolygon = Animated.createAnimatedComponent(Polygon);
+
 const METRICS = ['Puntaje', 'Peso', 'Volumen', 'e1RM'];
 
 export default function ProgressChart({ data, rango, stats, selectedExId, setSelectedExId }) {
   const [metric, setMetric] = useState('Puntaje');
   const [pickerOpen, setPickerOpen] = useState(false);
   const u = data.unit || 'kg';
+  const draw = useRef(new Animated.Value(0)).current;
 
   const [scrollX, setScrollX] = useState(0);
   const [contentWidth, setContentWidth] = useState(1);
@@ -27,6 +31,16 @@ export default function ProgressChart({ data, rango, stats, selectedExId, setSel
   const series = progressSeries(data, rango, metric, selectedExId);
   const totalSessions = stats.sessions;
   const showEmpty = totalSessions < 3;
+
+  useEffect(() => {
+    draw.setValue(0);
+    Animated.timing(draw, {
+      toValue: 1,
+      duration: 850,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [metric, selectedExId, series.length, showEmpty]);
 
   const exName = selectedExId ? (exerciseById(selectedExId)?.name || 'Ejercicio') : 'Todos los ejercicios';
   const pctDiff = stats.diffScore >= 0 ? `+${stats.diffScore}%` : `${stats.diffScore}%`;
@@ -169,10 +183,25 @@ export default function ProgressChart({ data, rango, stats, selectedExId, setSel
           ) : (
             <>
               {/* Polygon fill */}
-              {polygonStr ? <Polygon points={polygonStr} fill={C.accent} opacity="0.14" /> : null}
+              {polygonStr ? (
+                <AnimatedPolygon
+                  points={polygonStr}
+                  fill={C.accent}
+                  opacity={draw.interpolate({ inputRange: [0, 1], outputRange: [0, 0.14] })}
+                />
+              ) : null}
               {/* Line */}
               {series.length > 1 ? (
-                <Path d={`M ${series.map((s, i) => `${getX(i, series.length)},${getY(s.value)}`).join(' L ')}`} fill="none" stroke={C.accent} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                <AnimatedPath
+                  d={`M ${series.map((s, i) => `${getX(i, series.length)},${getY(s.value)}`).join(' L ')}`}
+                  fill="none"
+                  stroke={C.accent}
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeDasharray={1000}
+                  strokeDashoffset={draw.interpolate({ inputRange: [0, 1], outputRange: [1000, 0] })}
+                />
               ) : null}
               {/* Points */}
               {series.map((s, i) => {

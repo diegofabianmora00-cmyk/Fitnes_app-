@@ -117,7 +117,7 @@ export default function Home({ go, start, isActive }) {
               }, 0) / 60))} min
             </T>
             <View style={{ gap: 10 }}>
-              <Btn label="🚀 Iniciar" onPress={() => start(todaysRoutine)} style={{ minHeight: 52, borderRadius: 20 }} />
+              <Btn label="Iniciar" icon="play" onPress={() => start(todaysRoutine)} style={{ minHeight: 52, borderRadius: 20 }} />
               <Btn kind="ghost" label="Elegir otra rutina de la semana..." onPress={() => setShowPicker(true)} style={{ minHeight: 44, borderRadius: 16 }} />
             </View>
           </Card>
@@ -129,7 +129,7 @@ export default function Home({ go, start, isActive }) {
               <T mute>Día de descanso o sin rutina asignada</T>
               <T style={{ fontSize: 20, fontWeight: '700', marginTop: 2, marginBottom: 8 }}>¿Listo para entrenar hoy?</T>
               <T mute style={{ fontSize: 13, marginBottom: 16 }}>Puedes iniciar cualquier rutina de tu semana cuando quieras.</T>
-              <Btn label="🚀 Iniciar entrenamiento" onPress={() => setShowPicker(true)} style={{ minHeight: 50, borderRadius: 20 }} />
+              <Btn label="Iniciar entrenamiento" icon="play" onPress={() => setShowPicker(true)} style={{ minHeight: 50, borderRadius: 20 }} />
             </Card>
           </FadeIn>
 

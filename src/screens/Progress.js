@@ -47,9 +47,11 @@ export default function Progress() {
 
   return (
     <ScrollView
-      style={{ width: '100%' }}
+      style={{ flex: 1, width: '100%' }}
       contentContainerStyle={{ padding: 22, paddingBottom: Math.max(ins.bottom, 20) + 40 }}
       showsVerticalScrollIndicator={false}
+      nestedScrollEnabled
+      scrollEventThrottle={16}
     >
       <FadeIn>
         <View style={{ marginBottom: 4 }}>
