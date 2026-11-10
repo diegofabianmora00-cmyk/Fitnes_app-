@@ -28,6 +28,8 @@ no los crees ni los edites.
   mood neutral | happy | alert; size 'sm' | 'lg'.
 - src/load.js: sistema de tipos de carga y lógica pura de cálculo (totalFromInputs, plateBreakdown, nearestLoadable, volumeFactor, GYM_DEFAULT).
 - src/autoreg.js: motor puro de autoregulación en vivo (e1rmKg, repsAtLoadKg, targetLoadKg, fatigueDrop, readiness, rirTargetFor, nextSetPlan, nextSessionPlan) y redondeo de carga por equipo.
+- src/sessionMonitor.js: motor puro de monitoreo de la sesión completa (evaluateSession) que detecta dolor, carga demasiado pesada/ligera, fatiga, descansos cortos, retorno tras pausa y poco tiempo, con acción concreta y `action.next` (peso/reps) calculado con el modelo de e1RM de autoreg.
+- src/__tests__/sessionMonitor.test.js: pruebas del monitor de sesión (jest).
 - src/exercises.js: COMPENDIUM, METS, exercises (79 con loadType), GROUPS, exerciseById,
   filterExercises, registerCustomExercises, kcalPerHour.
 - src/ExercisePicker.js: selector con buscador (props: visible, onClose, onSelect, selectedId).
@@ -139,5 +141,6 @@ workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName, 
 ## Estado
 - Hecho: app base, base de ejercicios (79), perfil, motor de recomendación, entrenamiento guiado, calorías, gráficas básicas, pruebas del motor y puntaje (54), rediseño completo de la pestaña Rutinas (+buscador, ejercicios personalizados en data.customExercises, vista de detalle de rutina hecha con descanso, RIR, botón "EDITAR" y reordenamiento de ejercicios con `↑`/`↓`), rediseño completo de la pestaña Progreso (con filtros e historial agrupado por mes), rediseño completo de la pestaña Inicio, puntaje de sesión v5, rediseño completo de la pestaña Ajustes, y Prompt 1 (sistema de tipos de carga: datos, funciones puras, migración a schemaVersion 5 y pruebas unitarias completas).
 - Hecho (último paso): Prompts 4 y 5 del sistema en tiempo real (tarjeta SIGUE con descanso, edición de peso/reps, motivo de una línea, "Por qué" y botón Dolor; schemaVersion 6 con guides normalizados en store y borrador, puntaje v5 contra el guide vivo, ajustes/dolor en SessionReview, coachMemory con serie actual y documentación); 99 pruebas y export de Android en verde.
+- Hecho: Fase 1 del monitor de sesión (`src/sessionMonitor.js` + tests). La alerta se muestra en diálogo de Atlas (no banner), con acción de un toque que cambia peso/reps del próximo set vía `action.next` y guarda las series como confirmadas. En Registro se muestra en gris el peso y las reps recomendadas al lado de cada campo. La carga sugerida se recalcula con e1RM: si la serie queda 2+ reps por debajo del objetivo se ignora el RIR reportado (poco fiable) y se baja al menos 10% (ACSM), pudiendo llegar a 15-25%; si sobran reps o se supera el rango, se sube con e1RM o 3%/rep extra. 107 pruebas y export de Android en verde.
 - Por confirmar: prueba manual del flujo completo en emulador (el dispositivo local se desconectó); la app compila y abre con exp://10.0.2.2:8081 cuando el emulador está disponible.
 - Pendiente: Prompt 6 (pasada final de coherencia) ya revisado en código; solo queda la prueba manual en dispositivo.

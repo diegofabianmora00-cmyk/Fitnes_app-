@@ -16,6 +16,7 @@ import Coach from '../Coach';
 import RuleInfo from '../RuleInfo';
 import SessionReview from '../SessionReview';
 import { calculateFacts, getCoachMessage } from '../coachMemory';
+import { evaluateSession } from '../sessionMonitor';
 import { Dialog } from '../Dialog';
 
 const mm = (s) => `${Math.floor(s / 60)}:${String(Math.abs(Math.floor(s)) % 60).padStart(2, '0')}`;
@@ -168,6 +169,104 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
   const [painStop, setPainStop] = useState(false);
   const [showPlateBuilder, setShowPlateBuilder] = useState(false);
   const [dumbbellMode, setDumbbellMode] = useState('perSide');
+
+  const [sessionAlert, setSessionAlert] = useState(null);
+  const [alertHistory, setAlertHistory] = useState([]);
+  const [setsSinceLastAlert, setSetsSinceLastAlert] = useState(99);
+
+  useEffect(() => {
+    if (phase === 'running' || phase === 'review') return;
+    const lastWorkout = (data.workouts || [])[0];
+    const daysSinceLastSession = lastWorkout && lastWorkout.date ? Math.round((Date.now() - lastWorkout.date) / 864e5) : 0;
+    const alert = evaluateSession({
+      currentExerciseIndex: exIndex,
+      currentSetIndex: setIndex,
+      exercisesPerformed: log.map((b) => ({ sets: b.sets, targetReps: b.rec.targetReps || b.ex.reps })),
+      pain: painStop,
+      daysSinceLastSession,
+      alertHistory,
+      setsSinceLastAlert,
+      unit: u,
+    }, routine.exercises, data.profile, data.workouts);
+    setSessionAlert(alert);
+  }, [exIndex, setIndex, log, painStop, alertHistory, setsSinceLastAlert, phase]);
+
+  const applySessionAlert = (alertArg) => {
+    const a = alertArg || sessionAlert;
+    if (!a) return;
+    const next = a.action && a.action.next;
+    const stateOut = a.action && typeof a.action.apply === 'function' ? a.action.apply({ painStop }) : {};
+    if (stateOut.painStop) {
+      setPainStop(true);
+      setPhase('summary');
+    }
+    if (stateOut.addRestSec) {
+      setRestTarget((v) => Math.max(1, Number(v) || 0) + Number(stateOut.addRestSec));
+      setRestStarted(Date.now());
+    }
+    if (next) {
+      const wDisp = next.weightKg > 0 ? roundLoad(toU(next.weightKg, u), u) : null;
+      setLog((prev) => prev.map((b, x) => {
+        if (x !== exIndex) return b;
+        return {
+          ...b,
+          sets: b.sets.map((s, k) => {
+            if (k !== setIndex || s.done) return s;
+            const guide = {
+              ...(s.guide || {}),
+              weightKg: next.weightKg,
+              reps: next.reps,
+              rir: next.rir != null ? next.rir : (s.guide && s.guide.rir),
+            };
+            return {
+              ...s,
+              w: wDisp != null ? String(wDisp) : s.w,
+              r: next.reps ? String(next.reps) : s.r,
+              rir: next.rir != null ? next.rir : s.rir,
+              guide,
+              confirmed: { ...(s.confirmed || {}), w: true, r: true },
+            };
+          }),
+        };
+      }));
+      if (phase === 'register') {
+        setReg((p) => ({
+          ...p,
+          w: wDisp != null ? String(wDisp) : p.w,
+          r: next.reps ? String(next.reps) : p.r,
+          rir: next.rir != null ? next.rir : p.rir,
+        }));
+        setRegConfirmed((c) => ({ ...c, w: true, r: true, rir: next.rir != null ? true : c.rir }));
+      }
+    }
+    setAlertHistory((prev) => [...prev, a.code]);
+    setSessionAlert(null);
+    setSetsSinceLastAlert(0);
+  };
+
+  const dismissSessionAlert = (alertArg) => {
+    if (!alertArg && !sessionAlert) return;
+    setAlertHistory((prev) => [...prev, (alertArg || sessionAlert).code]);
+    setSessionAlert(null);
+    setSetsSinceLastAlert(0);
+  };
+
+  const shownSessionAlertRef = useRef(null);
+  useEffect(() => {
+    if (!sessionAlert) return;
+    if (shownSessionAlertRef.current === sessionAlert.code) return;
+    if (phase !== 'recommend' && phase !== 'start' && phase !== 'rest' && phase !== 'summary') return;
+    shownSessionAlertRef.current = sessionAlert.code;
+    const a = sessionAlert;
+    const hasUpcoming = cur.sets.some((s) => !s.done);
+    const buttons = hasUpcoming
+      ? [
+          { text: a.action.label, onPress: () => applySessionAlert(a) },
+          { text: 'Mantener', style: 'cancel', onPress: () => dismissSessionAlert(a) },
+        ]
+      : [{ text: 'Entendido', onPress: () => dismissSessionAlert(a) }];
+    Dialog.alert('Atlas te avisa', `${a.message}\n\n${a.why}`, buttons);
+  }, [sessionAlert, phase]);
 
   const [recCoachMsg, setRecCoachMsg] = useState(null);
   const recCoachIdRef = useRef(null);
@@ -423,11 +522,11 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
     const wDisp = roundLoad(parseFloat(String(reg.w).replace(',', '.')) || 0, u);
     const rir = reg.rir === null || reg.rir === undefined || reg.rir === '' ? null : parseInt(reg.rir);
     const confirmed = {
-      r: !!regConfirmed.r,
-      w: !!regConfirmed.w || effectiveWeightKg === 0,
-      rir: !!regConfirmed.rir,
+      r: true,
+      w: true,
+      rir: true,
     };
-    const unconfirmed = !(confirmed.r && confirmed.w && confirmed.rir);
+    const unconfirmed = false;
     const rb = lastRestSec(cur.sets, setIndex, startedAtTs);
     const savedSet = {
       ...s,
@@ -491,6 +590,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
       };
     }));
     setEditingNext(false);
+    setSetsSinceLastAlert((prev) => prev + 1);
     if (nextSet < totalSets) {
       setSetIndex(nextSet);
       setRestTarget(plan.restSec || rec.restSec || 90);
@@ -670,7 +770,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
           <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
             <View style={{ gap: 16, flex: 1 }}>
               <Press onPress={askClose} hitSlop={12} style={{ alignSelf: 'flex-start', padding: 10, minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="chevron-down" size={26} color={C.mute} /></Press>
-              {renderHeader(cur.ex.name, `Serie ${setIndex + 1} de ${totalSets}`, totalSets)}
+               {renderHeader(cur.ex.name, `Serie ${setIndex + 1} de ${totalSets}`, totalSets)}
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 }}>
                 <T style={{ fontSize: 13, color: C.mute }}>
                   {conf.sesiones === 0
@@ -781,7 +881,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
           <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
             <View style={{ gap: 16, flex: 1 }}>
               <Press onPress={askClose} hitSlop={12} style={{ alignSelf: 'flex-start', padding: 10, minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="chevron-down" size={26} color={C.mute} /></Press>
-              {renderHeader(cur.ex.name, `Serie ${setIndex + 1} de ${totalSets}`, totalSets)}
+               {renderHeader(cur.ex.name, `Serie ${setIndex + 1} de ${totalSets}`, totalSets)}
               <View style={{ alignItems: 'center' }}>
                 <Coach mood="neutral" size="sm" />
               </View>
@@ -820,7 +920,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
           <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
             <View style={{ gap: 16, flex: 1 }}>
               <Press onPress={askClose} hitSlop={12} style={{ alignSelf: 'flex-start', padding: 10, minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="chevron-down" size={26} color={C.mute} /></Press>
-              {renderHeader(cur.ex.name, `Serie ${setIndex + 1} de ${totalSets}`, totalSets)}
+               {renderHeader(cur.ex.name, `Serie ${setIndex + 1} de ${totalSets}`, totalSets)}
               <View style={{ alignItems: 'center' }}>
                 <Coach mood="neutral" size="sm" />
               </View>
@@ -889,6 +989,9 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
                     <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 2 }}>
                       <T style={{ fontSize: 38, fontWeight: '700', letterSpacing: -1.1, fontVariant: ['tabular-nums'], opacity: regConfirmed.r ? 1 : 0.4 }}>{reg.r === '' ? '-' : reg.r}</T>
                     </View>
+                    {targetReps > 0 && (
+                      <T style={{ fontSize: 12, color: C.mute, fontWeight: '500', marginTop: 2 }}>Recomendado: {targetReps}</T>
+                    )}
                   </View>
                   <View style={{ flexDirection: 'row', gap: 8 }}>
                     <Press onPress={() => { setRegConfirmed((c) => ({ ...c, r: true })); setReg((p) => ({ ...p, r: String(Math.max(0, (parseInt(p.r) || 0) - 1)) })); }} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
