@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Modal, ScrollView, Share, View } from 'react-native';
+import { Modal, ScrollView, Share, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { C } from '../theme';
@@ -11,6 +11,7 @@ import { COACH_TONES } from '../coachMemory';
 import ProfileSetup from './ProfileSetup';
 import CustomExerciseModal from '../CustomExerciseModal';
 import RuleInfo from '../RuleInfo';
+import { Dialog } from '../Dialog';
 import { GYM_DEFAULT } from '../load';
 
 export default function Settings() {
@@ -27,7 +28,7 @@ export default function Settings() {
   const p = data.profile || {};
   const customExercises = data.customExercises || [];
 
-  const resetWorkoutsOnly = () => Alert.alert(
+  const resetWorkoutsOnly = () => Dialog.alert(
     'Borrar historial',
     'Se eliminará todo tu historial de entrenamientos y récords, manteniendo tus rutinas y perfil.',
     [
@@ -36,7 +37,7 @@ export default function Settings() {
     ]
   );
 
-  const resetAll = () => Alert.alert(
+  const resetAll = () => Dialog.alert(
     'Borrar todo',
     'Se eliminarán rutinas, perfil e historial por completo.',
     [
@@ -47,7 +48,7 @@ export default function Settings() {
 
   const handleImport = () => {
     if (!importText.trim()) {
-      Alert.alert('Error', 'Pega un código JSON válido.');
+      Dialog.alert('Error', 'Pega un código JSON válido.');
       return;
     }
     try {
@@ -56,18 +57,18 @@ export default function Settings() {
       update(() => migrated);
       setShowImport(false);
       setImportText('');
-      Alert.alert('Restaurado', 'Tus datos se han importado y restaurado correctamente.');
+      Dialog.alert('Restaurado', 'Tus datos se han importado y restaurado correctamente.');
     } catch (e) {
-      Alert.alert('Error de formato', 'El texto ingresado no es un JSON válido.');
+      Dialog.alert('Error de formato', 'El texto ingresado no es un JSON válido.');
     }
   };
 
   const simulateCorrupt = async () => {
     try {
       await AsyncStorage.setItem(KEYS.data, '{ "routines": [ datos dañados ');
-      Alert.alert('Datos dañados simulados', 'Cierra y vuelve a abrir la app para probar la recuperación desde la copia válida.');
+      Dialog.alert('Datos dañados simulados', 'Cierra y vuelve a abrir la app para probar la recuperación desde la copia válida.');
     } catch (e) {
-      Alert.alert('No se pudo simular', 'Inténtalo de nuevo.');
+      Dialog.alert('No se pudo simular', 'Inténtalo de nuevo.');
     }
   };
 
@@ -431,7 +432,7 @@ export default function Settings() {
                 label="Corregir / editar sesión de ejercicio"
                 onPress={() => {
                   if (!data.workouts || data.workouts.length === 0) {
-                    Alert.alert('Sin historial', 'No hay sesiones registradas en el historial para editar.');
+                    Dialog.alert('Sin historial', 'No hay sesiones registradas en el historial para editar.');
                     return;
                   }
                   setShowEditWorkout(true);
@@ -445,29 +446,29 @@ export default function Settings() {
                     try {
                       await AsyncStorage.setItem(KEYS.seedBackup, JSON.stringify(data));
                       update(() => migrate(s.data));
-                      Alert.alert('Pruebas', `Caso cargado: ${s.label}`);
+                      Dialog.alert('Pruebas', `Caso cargado: ${s.label}`);
                     } catch (e) {
-                      Alert.alert('Error', 'No se pudo cargar el caso de prueba.');
+                      Dialog.alert('Error', 'No se pudo cargar el caso de prueba.');
                     }
                   }
                 }));
                 buttons.push({ text: 'Cancelar', style: 'cancel' });
-                Alert.alert('Pruebas', 'Elige un caso de historial', buttons);
+                Dialog.alert('Pruebas', 'Elige un caso de historial', buttons);
               }} />
 
               <Btn kind="ghost" label="Volver a mis datos anteriores" onPress={async () => {
                 try {
                   const text = await AsyncStorage.getItem(KEYS.seedBackup);
                   if (!text) {
-                    Alert.alert('Pruebas', 'No hay datos guardados en respaldo.');
+                    Dialog.alert('Pruebas', 'No hay datos guardados en respaldo.');
                     return;
                   }
                   const raw = JSON.parse(text);
                   const merged = migrate(raw);
                   update(() => merged);
-                  Alert.alert('Pruebas', 'Se restauraron tus datos anteriores.');
+                  Dialog.alert('Pruebas', 'Se restauraron tus datos anteriores.');
                 } catch (e) {
-                  Alert.alert('Error', 'No se pudieron restaurar tus datos.');
+                  Dialog.alert('Error', 'No se pudieron restaurar tus datos.');
                 }
               }} />
 
@@ -476,7 +477,7 @@ export default function Settings() {
                 icon="warning-outline"
                 label="Reiniciar app desde cero"
                 onPress={() => {
-                  Alert.alert(
+                  Dialog.alert(
                     'Reiniciar desde cero',
                     'Se borrarán todos tus datos y perfil, iniciando la app como por primera vez.',
                     [
@@ -488,9 +489,9 @@ export default function Settings() {
                           try {
                             await AsyncStorage.clear();
                             update(() => migrate(seed));
-                            Alert.alert('Reiniciado', 'La app se ha reiniciado desde cero.');
+                            Dialog.alert('Reiniciado', 'La app se ha reiniciado desde cero.');
                           } catch (e) {
-                            Alert.alert('Error', 'No se pudo reiniciar.');
+                            Dialog.alert('Error', 'No se pudo reiniciar.');
                           }
                         }
                       }
@@ -529,7 +530,7 @@ export default function Settings() {
                     </View>
                     <Press
                       onPress={() => {
-                        Alert.alert(
+                        Dialog.alert(
                           'Eliminar ejercicio',
                           `¿Deseas eliminar "${ce.name}"?`,
                           [
@@ -680,14 +681,14 @@ export default function Settings() {
                         update((d) => migrate({ ...d, workouts: updatedWorkouts }));
                         setShowEditWorkout(false);
                         setEditingWorkout(null);
-                        Alert.alert('Actualizado', 'La sesión de ejercicio se ha corregido y los récords se han recalculado.');
+                        Dialog.alert('Actualizado', 'La sesión de ejercicio se ha corregido y los récords se han recalculado.');
                       }}
                     />
                     <Btn
                       kind="ghost"
                       label="Eliminar esta sesión"
                       onPress={() => {
-                        Alert.alert(
+                        Dialog.alert(
                           'Eliminar sesión',
                           '¿Estás seguro de eliminar esta sesión del historial?',
                           [
@@ -700,7 +701,7 @@ export default function Settings() {
                                 update((d) => migrate({ ...d, workouts: updatedWorkouts }));
                                 setShowEditWorkout(false);
                                 setEditingWorkout(null);
-                                Alert.alert('Eliminado', 'La sesión fue eliminada del historial.');
+                                Dialog.alert('Eliminado', 'La sesión fue eliminada del historial.');
                               }
                             }
                           ]

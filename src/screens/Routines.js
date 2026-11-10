@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Alert, KeyboardAvoidingView, Modal, Platform, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, ScrollView, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C } from '../theme';
 import { Btn, Card, FadeIn, Field, H, Press, T } from '../ui';
@@ -8,6 +8,7 @@ import { GROUPS, filterExercises } from '../exercises';
 import { GOALS } from '../recommend';
 import Coach from '../Coach';
 import CustomExerciseModal from '../CustomExerciseModal';
+import { Dialog } from '../Dialog';
 
 const DAYS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const DAY_NAMES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
@@ -230,7 +231,7 @@ function Editor({ routine, onClose }) {
                 {/* Series */}
                 <Press
                   onPress={() => {
-                    Alert.alert('Series por defecto', 'Elige número de series', [
+                    Dialog.alert('Series por defecto', 'Elige número de series', [
                       { text: '3', onPress: () => updateDefaults('sets', 3) },
                       { text: '4', onPress: () => updateDefaults('sets', 4) },
                       { text: '5', onPress: () => updateDefaults('sets', 5) },
@@ -245,7 +246,7 @@ function Editor({ routine, onClose }) {
                 {/* Repeticiones */}
                 <Press
                   onPress={() => {
-                    Alert.alert('Repeticiones por defecto', 'Elige número de repeticiones', [
+                    Dialog.alert('Repeticiones por defecto', 'Elige número de repeticiones', [
                       { text: '8', onPress: () => updateDefaults('reps', 8) },
                       { text: '10', onPress: () => updateDefaults('reps', 10) },
                       { text: '12', onPress: () => updateDefaults('reps', 12) },
@@ -260,7 +261,7 @@ function Editor({ routine, onClose }) {
                 {/* Descanso */}
                 <Press
                   onPress={() => {
-                    Alert.alert('Descanso por defecto', 'Elige tiempo de descanso', [
+                    Dialog.alert('Descanso por defecto', 'Elige tiempo de descanso', [
                       { text: '60s (1:00)', onPress: () => updateDefaults('restSec', 60) },
                       { text: '90s (1:30)', onPress: () => updateDefaults('restSec', 90) },
                       { text: '120s (2:00)', onPress: () => updateDefaults('restSec', 120) },
@@ -980,7 +981,7 @@ export default function Routines({ start }) {
   const activeDaysCount = [0,1,2,3,4,5,6].filter(d => routinesForDay(data, d).length > 0).length;
   const totalRoutines = data.routines.length;
 
-  const del = (r) => Alert.alert('Eliminar rutina', `¿Eliminar "${r.name}"?`, [
+  const del = (r) => Dialog.alert('Eliminar rutina', `¿Eliminar "${r.name}"?`, [
     { text: 'Cancelar', style: 'cancel' },
     { text: 'Eliminar', style: 'destructive', onPress: () => update((d) => ({ ...d, routines: d.routines.filter((x) => x.id !== r.id) })) },
   ]);

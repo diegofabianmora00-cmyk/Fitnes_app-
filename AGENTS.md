@@ -15,6 +15,9 @@ no los crees ni los edites.
   overlay de Workout (estado `routine`).
 - src/theme.js: colores (objeto C).
 - src/ui.js: Press, FadeIn, Card, T (texto), H (título), Btn, Field (input).
+- src/Dialog.js: diálogos propios con estética de la app (Atlas, iconos, animación de
+  entrada/salida y botones jerarquizados). API `Dialog.alert(title, message, buttons,
+  options)` compatible con Alert y `DialogHost` montado una vez en App.js.
 - src/store.js: StoreProvider y useStore() → { data, update, ready }. Helpers: uid, KG,
   toU(kg,u), fromU(v,u), lastSets(data,exId) y migrate() (normaliza datos viejos, la
   rutina inicial e1/e2/e3 y recalcula puntajes viejos a v3).
@@ -117,6 +120,6 @@ workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName, 
 
 ## Estado
 - Hecho: app base, base de ejercicios (79), perfil, motor de recomendación, entrenamiento guiado, calorías, gráficas básicas, pruebas del motor y puntaje (54), rediseño completo de la pestaña Rutinas (+buscador, ejercicios personalizados en data.customExercises, vista de detalle de rutina hecha con descanso, RIR, botón "EDITAR" y reordenamiento de ejercicios con `↑`/`↓`), rediseño completo de la pestaña Progreso (con filtros e historial agrupado por mes), rediseño completo de la pestaña Inicio, puntaje de sesión v4, rediseño completo de la pestaña Ajustes, y Prompt 1 (sistema de tipos de carga: datos, funciones puras, migración a schemaVersion 5 y pruebas unitarias completas).
-- Hecho (último paso): en modo claro los botones verdes usan texto/icono blanco (`C.accentText`), centrado el triángulo de inicio en Workout, y movido el chip del tipo de rutina a la línea del nombre para que no choque con el botón de borrar.
+- Hecho (último paso): reemplazados todos los `Alert.alert` nativos por diálogos propios (src/Dialog.js) con estética de la app, Atlas animado y botones con iconos; migradas las pruebas (60) y verificado el export de Android.
 - Por confirmar: ninguno (tipografía Inter en H y Btn confirmada y cargada correctamente con expo-google-fonts).
 - Pendiente: ninguno (prototipo completo y pulido).

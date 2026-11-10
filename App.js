@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert, Animated, BackHandler, Dimensions, ScrollView, Vibration, View } from 'react-native';
+import { Animated, BackHandler, Dimensions, ScrollView, Vibration, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,6 +15,7 @@ import Progress from './src/screens/Progress';
 import Settings from './src/screens/Settings';
 import Workout from './src/screens/Workout';
 import ProfileSetup from './src/screens/ProfileSetup';
+import { Dialog, DialogHost } from './src/Dialog';
 
 const DRAFT_KEY = KEYS.draft;
 
@@ -151,7 +152,7 @@ function Shell() {
       let d = null;
       try { d = JSON.parse(v); } catch (e) { d = null; }
       if (!isValidDraft(d)) { discard(); return; }
-      Alert.alert(
+      Dialog.alert(
         'Entreno sin terminar',
         `Tienes "${d.routine.name || 'tu rutina'}" en curso. ¿Qué deseas hacer?`,
         [
@@ -266,6 +267,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StoreProvider><StatusBar style="light" /><Shell /></StoreProvider>
+      <DialogHost />
     </SafeAreaProvider>
   );
 }

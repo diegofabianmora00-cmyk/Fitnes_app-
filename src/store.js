@@ -11,7 +11,6 @@ const BACKUP_KEY = KEYS.backup;
 const COPY_KEY = KEYS.copy;
 const CORRUPT_KEY = KEYS.corrupt;
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { exerciseById, registerCustomExercises } from './exercises';
 import { GYM_DEFAULT, defaultLoadType } from './load';
@@ -196,6 +195,7 @@ export function StoreProvider({ children }) {
       return null;
     };
     const handleCorrupt = async (originalText) => {
+      const { Dialog } = require('./Dialog');
       let backedUp = false;
       try { await AsyncStorage.setItem(CORRUPT_KEY, originalText); backedUp = true; } catch (e) {}
       const restored = await restoreFromCopies();
@@ -203,14 +203,14 @@ export function StoreProvider({ children }) {
         apply(restored);
         saveCopy(restored);
         if (backedUp) AsyncStorage.setItem(KEY, JSON.stringify(restored)).catch(() => {});
-        Alert.alert(
+        Dialog.alert(
           'Datos reparados',
           backedUp
             ? 'Tus datos guardados estaban dañados. Guardamos una copia del archivo original en el respaldo y restauramos la última copia válida.'
             : 'Tus datos guardados estaban dañados. Restauramos la última copia válida, pero no se pudo guardar el texto original.'
         );
       } else {
-        Alert.alert(
+        Dialog.alert(
           'Datos dañados',
           backedUp
             ? 'No pudimos leer tus datos y no había una copia válida. Guardamos el texto original en el respaldo para no perderlo. Se muestra la rutina inicial.'

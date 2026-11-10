@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, ScrollView, Vibration, View } from 'react-native';
+import { Animated, ScrollView, Vibration, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,6 +15,7 @@ import Coach from '../Coach';
 import RuleInfo from '../RuleInfo';
 import SessionReview from '../SessionReview';
 import { calculateFacts, getCoachMessage } from '../coachMemory';
+import { Dialog } from '../Dialog';
 
 const mm = (s) => `${Math.floor(s / 60)}:${String(Math.abs(Math.floor(s)) % 60).padStart(2, '0')}`;
 
@@ -235,13 +236,13 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
   const closeAll = () => { setSaved(null); AsyncStorage.removeItem(DRAFT_KEY).catch(()=>{}); close(); };
   const askClose = () => {
     if (log.some((b) => b.sets.some((s) => s.done))) {
-      Alert.alert('Salir del entrenamiento', 'Tienes series hechas. ¿Qué deseas hacer?', [
+      Dialog.alert('Salir del entrenamiento', 'Tienes series hechas. ¿Qué deseas hacer?', [
         { text: 'Seguir entrenando', style: 'cancel' },
         { text: 'Guardar lo hecho', onPress: () => { try { finishSession({ allowActive: true }); } catch(e) {} } },
         { text: 'Descartar', style: 'destructive', onPress: () => { AsyncStorage.removeItem(DRAFT_KEY).catch(()=>{}); close(); } },
       ]);
     } else {
-      Alert.alert('Salir del entrenamiento', 'Todavía no has hecho ninguna serie. ¿Salir?', [
+      Dialog.alert('Salir del entrenamiento', 'Todavía no has hecho ninguna serie. ¿Salir?', [
         { text: 'Seguir entrenando', style: 'cancel' },
         { text: 'Salir', style: 'destructive', onPress: () => { AsyncStorage.removeItem(DRAFT_KEY).catch(()=>{}); close(); } },
       ]);
@@ -284,7 +285,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
       goNextExercise();
       return;
     }
-    Alert.alert('Terminar sesión', '¿Deseas registrar algún ajuste especial hoy?', [
+    Dialog.alert('Terminar sesión', '¿Deseas registrar algún ajuste especial hoy?', [
       { text: 'Guardar normal', onPress: () => finishSession() },
       { text: 'Ajusté a propósito (cansancio/sueño)', onPress: () => finishSession({ adjusted: { reason: 'cansancio' } }) },
       { text: 'Ajusté a propósito (poco tiempo)', onPress: () => finishSession({ adjusted: { reason: 'poco tiempo' } }) },
@@ -352,7 +353,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
     const endedAtTs = s.endedAt || Date.now();
     const r = parseInt(String(reg.r).replace(',', '.')) || 0;
     if (!(r > 0)) {
-      Alert.alert('Falta reps', 'Anota cuántas repeticiones hiciste antes de guardar la serie.');
+      Dialog.alert('Falta reps', 'Anota cuántas repeticiones hiciste antes de guardar la serie.');
       return;
     }
     const wDisp = roundLoad(parseFloat(String(reg.w).replace(',', '.')) || 0, u);
@@ -399,7 +400,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
     if (saved) return;
     Vibration.vibrate([0, 60, 80, 60]);
     if (!opts.allowActive && log.some((b) => b.sets.some((s) => s.active))) {
-      Alert.alert('Serie en curso', 'Termina o cancela la serie antes de guardar.');
+      Dialog.alert('Serie en curso', 'Termina o cancela la serie antes de guardar.');
       return;
     }
     const endedAt = Date.now();
@@ -429,7 +430,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
       }),
     })).filter((e) => e.sets.length);
     if (!exercises.length) {
-      Alert.alert('Sin series', 'Marca al menos una serie como hecha.');
+      Dialog.alert('Sin series', 'Marca al menos una serie como hecha.');
       return;
     }
     const plan = log.map((b) => ({
