@@ -90,7 +90,7 @@ describe('Load system and pure logic (src/load.js)', () => {
     expect(volumeFactor(pressBanca)).toBe(1);
   });
 
-  test('migration to schemaVersion 5 preserves existing w weights untouched', () => {
+  test('migration to schemaVersion 6 preserves existing w weights untouched', () => {
     const oldData = {
       schemaVersion: 4,
       workouts: [
@@ -108,9 +108,39 @@ describe('Load system and pure logic (src/load.js)', () => {
     };
 
     const migrated = migrate(oldData);
-    expect(migrated.schemaVersion).toBe(5);
+    expect(migrated.schemaVersion).toBe(6);
     expect(migrated.gym).toBeDefined();
     expect(migrated.workouts[0].exercises[0].sets[0].w).toBe(80);
     expect(migrated.workouts[0].exercises[0].loadType).toBe('barbell');
+    expect(migrated.workouts[0].exercises[0].sets[0].guide).toBeNull();
+  });
+
+  test('migration to schemaVersion 6 normalizes live guides and keeps old sets working', () => {
+    const oldData = {
+      schemaVersion: 5,
+      workouts: [
+        {
+          id: 'w1',
+          date: 1000,
+          exercises: [
+            {
+              exId: 'press-banca',
+              sets: [
+                { w: 80, r: 10, rir: 2, guide: { weightKg: '80', reps: '10', rir: '2', restSec: '120' }, adjustment: 'Subí un paso.' },
+                { w: 80, r: 8, rir: 1 },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const migrated = migrate(oldData);
+    const sets = migrated.workouts[0].exercises[0].sets;
+    expect(migrated.schemaVersion).toBe(6);
+    expect(sets[0].guide).toEqual({ weightKg: 80, reps: 10, rir: 2, restSec: 120 });
+    expect(sets[0].adjustment).toBe('Subí un paso.');
+    expect(sets[1].guide).toBeNull();
+    expect(sets[1].w).toBe(80);
   });
 });

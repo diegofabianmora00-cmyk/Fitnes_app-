@@ -5,7 +5,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { C } from './theme';
 import { Btn, Card, Press, T } from './ui';
 import { RULES } from './recommend';
-import { workoutKcal } from './exercises';
 import { toU, useStore } from './store';
 import Coach from './Coach';
 
@@ -90,8 +89,10 @@ export default function SessionReview({ visible, review, records = [], workout =
   const [showRest, setShowRest] = useState(false);
   const [comment, setComment] = useState(() => (workout ? (workout.comment || '') : ''));
   const unit = data.unit;
-  const bodyKg = Number(data.profile && data.profile.weightKg) || 0;
-  const kcal = workout ? workoutKcal(workout, bodyKg) : 0;
+  const adjustments = workout
+    ? (workout.exercises || []).flatMap((e) => (e.sets || []).map((s, i) => ({ ...s, exName: e.name, setNumber: i + 1 })).filter((s) => s.adjustment))
+    : [];
+  const pain = workout && workout.adjusted && workout.adjusted.reason === 'dolor';
 
   useEffect(() => {
     if (visible) {
@@ -153,21 +154,7 @@ export default function SessionReview({ visible, review, records = [], workout =
               </View>
             </View>
 
-            {workout && (
-              <Card style={{ marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: C.accentDim, alignItems: 'center', justifyContent: 'center' }}>
-                  <Ionicons name="flame-outline" size={21} color={C.accent} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <T style={{ fontWeight: '700' }}>{kcal > 0 ? `≈ ${kcal} kcal` : 'Calorías sin estimar'}</T>
-                  <T mute style={{ fontSize: 12, marginTop: 1 }}>
-                    {kcal > 0
-                      ? 'MET × peso × tiempo (Compendium 2024).'
-                      : 'Agrega tu peso corporal en tu perfil para ver las kcal.'}
-                  </T>
-                </View>
-              </Card>
-            )}
+
 
             {review && (
               <Card style={{ marginTop: 18 }}>
@@ -240,6 +227,29 @@ export default function SessionReview({ visible, review, records = [], workout =
                     <T mute style={{ fontSize: 11, lineHeight: 16, marginTop: 8 }}>Fuente: {RULES.score.source}</T>
                   </View>
                 )}
+              </Card>
+            )}
+
+            {(!!adjustments.length || pain) && (
+              <Card style={{ marginTop: 12 }}>
+                <T mute style={{ fontSize: 11, letterSpacing: 1, marginBottom: 8 }}>AJUSTES DE HOY</T>
+                {pain && (
+                  <View style={{ flexDirection: 'row', gap: 9, marginBottom: adjustments.length ? 10 : 0 }}>
+                    <Ionicons name="bandage-outline" size={18} color={C.warn} />
+                    <T mute style={{ flex: 1, fontSize: 13, lineHeight: 19 }}>
+                      Paraste por dolor. La sesión quedó protegida y no se contaron récords.
+                    </T>
+                  </View>
+                )}
+                {adjustments.map((a, i) => (
+                  <View key={`${a.exName}-${a.setNumber}-${i}`} style={{ flexDirection: 'row', gap: 9, marginBottom: i === adjustments.length - 1 ? 0 : 10 }}>
+                    <Ionicons name="swap-vertical-outline" size={18} color={C.accent} />
+                    <View style={{ flex: 1 }}>
+                      <T style={{ fontSize: 13, fontWeight: '700' }}>{a.exName} · serie {a.setNumber}</T>
+                      <T mute style={{ fontSize: 12, lineHeight: 18, marginTop: 1 }}>{a.adjustment}</T>
+                    </View>
+                  </View>
+                ))}
               </Card>
             )}
 

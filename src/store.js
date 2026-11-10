@@ -52,7 +52,7 @@ export const PROFILE_DEFAULT = {
 const LEGACY = { e1: 'press-banca', e2: 'press-militar', e3: 'fondos' };
 
 export const seed = {
-  schemaVersion: 5,
+  schemaVersion: 6,
   unit: 'kg',
   themeMode: 'dark',
   gym: { ...GYM_DEFAULT },
@@ -102,6 +102,21 @@ export function routinesForDay(data, dayIndex) {
   return data.routines.filter((r) => Array.isArray(r.days) && r.days.includes(dayIndex));
 }
 
+const normalizeGuide = (g) => {
+  if (!g || typeof g !== 'object' || Array.isArray(g)) return null;
+  const weightKg = Number(g.weightKg);
+  const reps = Number(g.reps);
+  const rir = g.rir === null || g.rir === '' || g.rir === undefined ? null : Number(g.rir);
+  const restSec = Number(g.restSec);
+  if (![weightKg, reps, restSec].some(Number.isFinite) && !Number.isFinite(rir)) return null;
+  return {
+    weightKg: Number.isFinite(weightKg) ? weightKg : 0,
+    reps: Number.isFinite(reps) ? reps : 0,
+    rir: Number.isFinite(rir) ? rir : null,
+    restSec: Number.isFinite(restSec) ? restSec : 0,
+  };
+};
+
 const normalizeWorkoutExercise = (e) => {
   const exId = LEGACY[e.exId] || e.exId;
   const db = exerciseById(exId);
@@ -112,7 +127,11 @@ const normalizeWorkoutExercise = (e) => {
     loadType: e.loadType || (db && db.loadType) || 'barbell',
     targetReps: e.targetReps ?? e.target ?? 0,
     targetSets: e.targetSets ?? (e.sets || []).length,
-    sets: (e.sets || []).map((s) => ({ ...s })),
+    sets: (e.sets || []).map((s) => ({
+      ...s,
+      guide: normalizeGuide(s.guide),
+      adjustment: s.adjustment || null,
+    })),
   };
 };
 
@@ -158,7 +177,7 @@ export const migrate = (raw) => {
       exercises: (w.exercises || []).map(normalizeWorkoutExercise),
     }))
     .sort((a, b) => (b.date || 0) - (a.date || 0));
-  return rescoreWorkouts({ ...base, schemaVersion: 5, routines, customExercises, workouts, gym: base.gym });
+  return rescoreWorkouts({ ...base, schemaVersion: 6, routines, customExercises, workouts, gym: base.gym });
 };
 
 const Ctx = createContext();
@@ -245,15 +264,15 @@ export function StoreProvider({ children }) {
         }
         apply(merged);
         saveCopy(merged);
-        const staleScores = (raw.workouts || []).some((w) => !w.score || Number(w.score.v) !== 4);
-        if (raw.schemaVersion !== 5 || staleScores) AsyncStorage.setItem(KEY, JSON.stringify(merged)).catch(() => {});
+        const staleScores = (raw.workouts || []).some((w) => !w.score || Number(w.score.v) !== 5);
+        if (raw.schemaVersion !== 6 || staleScores) AsyncStorage.setItem(KEY, JSON.stringify(merged)).catch(() => {});
       })
       .catch(() => {}).finally(() => { if (alive) setReady(true); });
     return () => { alive = false; };
   }, []);
   const update = (fn) => {
     const n = fn(ref.current);
-    const next = { ...n, schemaVersion: 5 };
+    const next = { ...n, schemaVersion: 6 };
     ref.current = next;
     setData(next);
     const text = JSON.stringify(next);

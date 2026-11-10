@@ -1053,7 +1053,8 @@ const bestBefore = (data, workout, exId, kind) => {
 function scoreExerciseParts(data, planItem, performed, workout, includeProgress, weights) {
   const p = planItem || {};
   const e = performed || {};
-  const sets = scoreSets(e.sets);
+  const allSets = Array.isArray(e.sets) ? e.sets : [];
+  const sets = scoreSets(allSets);
   const targetSets = Math.max(1, Number(p.targetSets ?? e.targetSets) || Number(e.targetSets) || sets.length || 1);
   const targetReps = Number(p.targetReps ?? e.targetReps) || Number(e.targetReps) || 0;
   const targetRest = Number(p.targetRestSec ?? e.targetRestSec) || Number(e.targetRestSec) || 0;
@@ -1065,28 +1066,58 @@ function scoreExerciseParts(data, planItem, performed, workout, includeProgress,
   const adjusted = workout && workout.adjusted;
   const parts = {};
 
+  const guideAt = (i) => {
+    const g = allSets[i] && allSets[i].guide;
+    return g && typeof g === 'object' ? g : null;
+  };
+  const goalAt = (i, key, fallback) => {
+    const g = guideAt(i);
+    const raw = g ? g[key] : undefined;
+    const v = raw === null || raw === undefined || raw === '' ? NaN : Number(raw);
+    return Number.isFinite(v) ? v : fallback;
+  };
+  const guideRest = allSets
+    .map((s) => (s && s.guide ? Number(s.guide.restSec) : NaN))
+    .find((n) => Number.isFinite(n) && n > 0) || 0;
+  const restGoal = targetRest || guideRest;
+
   const repsVals = [];
   for (let i = 0; i < targetSets; i++) {
-    const s = sets[i];
-    if (!s) {
+    const s = allSets[i];
+    if (!s || s.unconfirmed || !(Number(s.r) > 0)) {
       repsVals.push(0);
       continue;
     }
     const r = Number(s.r) || 0;
-    repsVals.push(targetReps > 0 ? Math.min(1, r / targetReps) : r > 0 ? 1 : 0);
+    const goal = goalAt(i, 'reps', targetReps);
+    repsVals.push(goal > 0 ? Math.min(1, r / goal) : r > 0 ? 1 : 0);
   }
   const repsPct = repsVals.reduce((a, b) => a + b, 0) / targetSets;
   parts.plan = { value: clamp(repsPct, 0, 1), weight: weights.plan };
 
-  if (!adjusted && recWeight > 0 && sets.length) {
-    const avgWeight = sets.reduce((a, s) => a + (Number(s.w) || 0), 0) / sets.length;
-    parts.load = { value: clamp(avgWeight / recWeight, 0, 1), weight: weights.load };
+  if (!adjusted && sets.length) {
+    const loaded = allSets
+      .map((s, i) => ({ s, i }))
+      .filter(({ s }) => s && !s.unconfirmed && Number(s.r) > 0 && Number(s.w) > 0);
+    if (loaded.length) {
+      const ratios = loaded.map(({ s, i }) => {
+        const goal = goalAt(i, 'weightKg', recWeight);
+        return goal > 0 ? (Number(s.w) || 0) / goal : 1;
+      });
+      parts.load = {
+        value: clamp(ratios.reduce((a, b) => a + b, 0) / ratios.length, 0, 1),
+        weight: weights.load,
+      };
+    }
   }
 
-  const rirs = sets.map(setRir).filter((v) => v !== null);
+  const rirs = allSets
+    .map((s, i) => ({ s, i, rir: setRir(s) }))
+    .filter(({ s, rir }) => s && !s.unconfirmed && Number(s.r) > 0 && rir !== null);
   if (rirs.length) {
-    const vals = rirs.map((rir) => {
-      const dev = Math.abs(rir - targetRir);
+    const vals = rirs.map(({ i, rir }) => {
+      const goal = goalAt(i, 'rir', targetRir);
+      const dev = Math.abs(rir - goal);
       if (dev <= 1) return 1;
       if (dev === 2) return 0.75;
       return 0.3;
@@ -1094,23 +1125,24 @@ function scoreExerciseParts(data, planItem, performed, workout, includeProgress,
     parts.effort = { value: vals.reduce((a, b) => a + b, 0) / vals.length, weight: weights.effort };
   }
 
-  if (targetRest > 0) {
-    const rests = sets
-      .map((s) => Number(s.restBeforeSec))
-      .filter((n) => Number.isFinite(n) && n > 0);
+  if (restGoal > 0) {
+    const rests = allSets
+      .map((s, i) => ({ s, i, actual: Number(s && s.restBeforeSec) }))
+      .filter(({ s, actual }) => s && !s.unconfirmed && Number(s.r) > 0 && Number.isFinite(actual) && actual > 0);
     if (rests.length) {
-      const tolerance = Math.max(25, Math.round(targetRest * 0.25));
-      const vals = rests.map((actual) => {
-        const dev = actual - targetRest;
+      const vals = rests.map(({ i, actual }) => {
+        const goal = Math.max(1, goalAt(i, 'restSec', restGoal));
+        const tolerance = Math.max(25, Math.round(goal * 0.25));
+        const dev = actual - goal;
         if (Math.abs(dev) <= tolerance) return 1;
         if (dev > 0) {
           // Rested more than target: milder penalty
           const excess = dev - tolerance;
-          return Math.max(0.7, 1 - excess / (2 * targetRest));
+          return Math.max(0.7, 1 - excess / (2 * goal));
         } else {
           // Rested less than target: standard penalty
           const deficit = Math.abs(dev) - tolerance;
-          return Math.max(0, 1 - deficit / Math.max(1, targetRest));
+          return Math.max(0, 1 - deficit / Math.max(1, goal));
         }
       });
       parts.rest = { value: vals.reduce((a, b) => a + b, 0) / vals.length, weight: weights.rest };
@@ -1161,7 +1193,7 @@ export function sessionReview(data = {}, workout = {}) {
       grade: 'Sesión protegida',
       supportMessage: 'Escuchaste a tu cuerpo y paraste por dolor. Hoy lo importante es descansar.',
       components: [],
-      v: 4,
+      v: 5,
       adjusted: workout.adjusted,
       restNotes: [],
       missed: [],
@@ -1177,7 +1209,7 @@ export function sessionReview(data = {}, workout = {}) {
       grade: 'Datos insuficientes',
       supportMessage: 'No hay series confirmadas suficientes para calcular puntaje en esta sesión.',
       components: [],
-      v: 4,
+      v: 5,
       adjusted: workout.adjusted || null,
       restNotes: [],
       missed: [],
@@ -1239,7 +1271,7 @@ export function sessionReview(data = {}, workout = {}) {
     components: combined.components,
     restNotes,
     durationSec: Number(workout.durationSec) || 0,
-    v: 4,
+    v: 5,
     partial: !hasPlan,
     missed,
     adjusted: workout.adjusted || null,
@@ -1251,12 +1283,12 @@ export function exerciseReview(data = {}, e = {}) {
   const weights = getScoreWeights(profile);
   const item = scoreExerciseParts(data, e, e, null, false, weights);
   const combined = combineParts(item.parts, weights);
-  return { score: combined.score, grade: scoreGrade(combined.score), components: combined.components, v: 4 };
+  return { score: combined.score, grade: scoreGrade(combined.score), components: combined.components, v: 5 };
 }
 
 export function rescoreWorkouts(data = {}) {
   const workouts = (data.workouts || []).map((w) => {
-    if (w.score && Number(w.score.v) === 4) return w;
+    if (w.score && Number(w.score.v) === 5) return w;
     return { ...w, score: sessionReview(data, w) };
   });
   return { ...data, workouts };

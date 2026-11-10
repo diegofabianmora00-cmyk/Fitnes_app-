@@ -163,7 +163,7 @@ export default function ProfileSetup({ mode = 'setup', onDone }) {
     'Define cuándo Atlas debe subirte el peso de trabajo.',
     'Así sabemos con qué cargas empezar y cuánto exigirte desde el día uno.',
     'La constancia y frecuencia óptima según la ciencia del ACSM.',
-    'Se usan para calcular tus recomendaciones y estimar calorías.',
+    'Se usan para calcular tus recomendaciones.',
     'Ayuda a Atlas a calibrar tu recuperación y gasto energético.',
     'Adapta las alertas de seguridad y prevención de lesiones.',
     'Tu preferencia ajusta el descanso sin salir de los rangos seguros.',

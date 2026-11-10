@@ -6,11 +6,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Defs, LinearGradient as SvgGrad, Stop } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C } from '../theme';
-import { Btn, Card, Press, T } from '../ui';
+import { Btn, Card, Field, Press, T } from '../ui';
 import { fromU, KEYS, lastSets, toU, uid, useStore } from '../store';
-import { loadTypeLabels } from '../load';
+import { loadTypeLabels, plateBreakdown, GYM_DEFAULT } from '../load';
 import { exerciseById } from '../exercises';
 import { addLoadStep, confidence, exerciseReview, GOALS, labelOf, LEVELS, newRecords, recommendFor, roundLoad, RULES, sessionReview, subLoadStep } from '../recommend';
+import { nextSetPlan } from '../autoreg';
 import Coach from '../Coach';
 import RuleInfo from '../RuleInfo';
 import SessionReview from '../SessionReview';
@@ -74,17 +75,23 @@ const initLog = (data, routine, u) => routine.exercises.map((raw) => {
   const suggestedReps = String(rec.targetReps || ex.reps || '');
   const suggestedRir = targetRir(rec);
   const bodyweight = rec.weightKg === 0;
-  const sets = Array.from({ length: ex.sets }, (_, i) => ({
-    w: suggestedWeight,
-    r: prev[i] ? String(prev[i].r) : suggestedReps,
-    rir: suggestedRir,
-    confirmed: { r: false, w: bodyweight || rec.weightKg != null, rir: false },
-    unconfirmed: true,
-    startedAt: null,
-    endedAt: null,
-    restBeforeSec: null,
-    done: false,
-  }));
+  const plans = Array.isArray(rec.setPlans) ? rec.setPlans : [];
+  const sets = Array.from({ length: ex.sets }, (_, i) => {
+    const plan = plans[i] || { weightKg: rec.weightKg, reps: rec.targetReps || ex.reps, rir: suggestedRir, restSec: rec.restSec };
+    return {
+      w: suggestedWeight,
+      r: prev[i] ? String(prev[i].r) : suggestedReps,
+      rir: plan.rir,
+      guide: { weightKg: plan.weightKg, reps: plan.reps, rir: plan.rir, restSec: plan.restSec },
+      adjustment: null,
+      confirmed: { r: false, w: bodyweight || rec.weightKg != null, rir: false },
+      unconfirmed: true,
+      startedAt: null,
+      endedAt: null,
+      restBeforeSec: null,
+      done: false,
+    };
+  });
   return { ex, rec, sets };
 });
 
@@ -115,6 +122,8 @@ const restoreLog = (draftLog, routine, data, u) => {
         done,
         active: false,
         rir: s.rir == null ? null : s.rir,
+        guide: s.guide || ds.guide || null,
+        adjustment: s.adjustment || null,
         confirmed,
         unconfirmed,
         startedAt: done ? (s.startedAt || null) : null,
@@ -153,6 +162,12 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
   const [saved, setSaved] = useState(null);
   const [reg, setReg] = useState({ r: '', w: '', rir: null });
   const [regConfirmed, setRegConfirmed] = useState({ r: false, w: false, rir: false });
+  const [editingNext, setEditingNext] = useState(false);
+  const [editW, setEditW] = useState('');
+  const [editR, setEditR] = useState('');
+  const [painStop, setPainStop] = useState(false);
+  const [showPlateBuilder, setShowPlateBuilder] = useState(false);
+  const [dumbbellMode, setDumbbellMode] = useState('perSide');
 
   const [recCoachMsg, setRecCoachMsg] = useState(null);
   const recCoachIdRef = useRef(null);
@@ -180,7 +195,12 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
   useEffect(() => {
     if (phase !== 'register') return;
     try {
-      const facts = calculateFacts(data);
+      const liveSet = cur.sets[setIndex];
+      const facts = calculateFacts(data, Date.now(), {
+        set: liveSet,
+        name: cur.ex.name,
+        targetReps: (liveSet && liveSet.guide && liveSet.guide.reps) || rec.targetReps || cur.ex.reps,
+      });
       const tone = data.profile?.tone || 'tranquilo';
       const recent = data.coachMemory || [];
       const res = getCoachMessage('tras_serie', facts, tone, recent);
@@ -231,6 +251,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
   const totalSets = cur.ex.sets;
   const completedSets = cur.sets.filter((s) => s.done).length;
   const effectiveWeightKg = rec.weightKg;
+  const isBodyweightExercise = (rec.loadType || cur.ex.loadType) === 'bodyweight';
 
   const close = () => Animated.timing(y, { toValue: 900, duration: 240, useNativeDriver: true }).start(onClose);
   const closeAll = () => { setSaved(null); AsyncStorage.removeItem(DRAFT_KEY).catch(()=>{}); close(); };
@@ -263,6 +284,45 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
   });
 
   const updSet = (ei, si, patch) => setLog((a) => a.map((b, x) => (x !== ei ? b : { ...b, sets: b.sets.map((s, k) => (k !== si ? s : { ...s, ...patch })) })));
+
+  const openEditNext = () => {
+    const s = cur.sets[setIndex] || {};
+    const g = s.guide || {};
+    setEditW(String(s.w || (g.weightKg > 0 ? toU(g.weightKg, u) : '')));
+    setEditR(String(s.r || g.reps || ''));
+    setEditingNext(true);
+  };
+
+  const saveEditNext = () => {
+    const s = cur.sets[setIndex] || {};
+    const g = s.guide || {};
+    const wDisp = roundLoad(parseFloat(String(editW).replace(',', '.')) || 0, u);
+    const r = parseInt(String(editR).replace(',', '.')) || 0;
+    const kg = wDisp > 0 ? fromU(wDisp, u) : 0;
+    updSet(exIndex, setIndex, {
+      w: wDisp > 0 ? String(wDisp) : '',
+      r: r > 0 ? String(r) : String(g.reps || ''),
+      guide: { ...g, weightKg: kg, reps: r > 0 ? r : g.reps },
+      confirmed: { ...(s.confirmed || {}), w: true, r: true },
+    });
+    setEditingNext(false);
+  };
+
+  const markPain = () => {
+    Dialog.alert('Dolor', 'Si el dolor persiste o limita el movimiento, lo mejor es parar. ¿Detenemos el ejercicio?', [
+      { text: 'Seguir entrenando', style: 'cancel' },
+      {
+        text: 'Parar por dolor',
+        style: 'destructive',
+        onPress: () => {
+          setPainStop(true);
+          updSet(exIndex, setIndex, { active: false });
+          setStartedAt(null);
+          setPhase('summary');
+        },
+      },
+    ]);
+  };
 
   const applyRecommendation = () => {
     if (rec.weightKg != null && rec.weightKg > 0) {
@@ -306,6 +366,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
 
   const skipSet = () => {
     setTouched(true);
+    setEditingNext(false);
     if (setIndex + 1 < totalSets) {
       setSetIndex((s) => s + 1);
       setPhase('recommend');
@@ -318,6 +379,8 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
 
   const startRunning = (si) => {
     setTouched(true);
+    setEditingNext(false);
+    setWhy(null);
     const nowTs = Date.now();
     setStartedAt(nowTs);
     setSetIndex(si);
@@ -331,10 +394,11 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
     const endedAt = Date.now();
     updSet(exIndex, setIndex, { endedAt, active: false });
     const sSet = cur.sets[setIndex];
+    const guide = sSet.guide || {};
     setReg({
-      r: sSet.r || String(rec.targetReps || cur.ex.reps || ''),
-      w: sSet.w || (effectiveWeightKg > 0 ? String(toU(effectiveWeightKg, u)) : ''),
-      rir: sSet.rir != null ? sSet.rir : targetRir(rec),
+      r: sSet.r || String(guide.reps || rec.targetReps || cur.ex.reps || ''),
+      w: sSet.w || (guide.weightKg > 0 ? String(toU(guide.weightKg, u)) : (effectiveWeightKg > 0 ? String(toU(effectiveWeightKg, u)) : '')),
+      rir: sSet.rir != null ? sSet.rir : (guide.rir != null ? guide.rir : targetRir(rec)),
     });
     setRegConfirmed(sSet.confirmed ? { ...sSet.confirmed } : { r: false, w: false, rir: false });
     setPhase('register');
@@ -365,10 +429,12 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
     };
     const unconfirmed = !(confirmed.r && confirmed.w && confirmed.rir);
     const rb = lastRestSec(cur.sets, setIndex, startedAtTs);
-    updSet(exIndex, setIndex, {
+    const savedSet = {
+      ...s,
       w: wDisp > 0 ? String(wDisp) : '',
       r: String(r),
       rir,
+      guide: s.guide || null,
       confirmed,
       unconfirmed,
       failure: rir === 0,
@@ -377,11 +443,57 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
       restBeforeSec: rb,
       done: true,
       active: false,
-    });
+    };
+    const nextSets = cur.sets.map((x, i) => (i === setIndex ? savedSet : x));
     const nextSet = setIndex + 1;
+    const plan = nextSetPlan({
+      data,
+      ex: cur.ex,
+      sets: nextSets,
+      setIndex,
+      totalSets,
+      startPlan: (rec.setPlans && rec.setPlans[0]) || {
+        weightKg: rec.weightKg,
+        reps: rec.targetReps,
+        rir: targetRir(rec),
+        restSec: rec.restSec,
+      },
+      restTarget: restTarget || rec.restSec,
+      gym: data.gym,
+    });
+    const prevGuide = (cur.sets[nextSet] && cur.sets[nextSet].guide) || s.guide || {};
+    const nextGuide = plan.guide || { weightKg: plan.weightKg, reps: plan.reps, rir: plan.rir, restSec: plan.restSec };
+    const changed = nextSet < totalSets && ['weightKg', 'reps', 'rir', 'restSec'].some((k) => Number(nextGuide[k]) !== Number(prevGuide[k]));
+    const nextPatch = nextSet < totalSets ? {
+      w: plan.weightKg > 0 ? String(roundLoad(toU(plan.weightKg, u), u)) : '',
+      r: String(plan.reps || rec.targetReps || cur.ex.reps || ''),
+      rir: plan.rir,
+      guide: nextGuide,
+      adjustment: null,
+      confirmed: { r: false, w: isBodyweightExercise || plan.weightKg > 0, rir: false },
+      unconfirmed: true,
+      failure: false,
+      done: false,
+      active: false,
+      startedAt: null,
+      endedAt: null,
+      restBeforeSec: null,
+    } : null;
+    setLog((a) => a.map((b, x) => {
+      if (x !== exIndex) return b;
+      return {
+        ...b,
+        sets: b.sets.map((set, k) => {
+          if (k === setIndex) return { ...savedSet, adjustment: changed ? plan.reason : null };
+          if (k === nextSet && nextPatch) return { ...set, ...nextPatch };
+          return set;
+        }),
+      };
+    }));
+    setEditingNext(false);
     if (nextSet < totalSets) {
       setSetIndex(nextSet);
-      setRestTarget(rec.restSec || 90);
+      setRestTarget(plan.restSec || rec.restSec || 90);
       setRestStarted(endedAtTs);
       setPhase('rest');
     } else {
@@ -423,6 +535,8 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
           startedAt: s.startedAt,
           endedAt: s.endedAt,
           restBeforeSec: s.restBeforeSec,
+          guide: s.guide || null,
+          adjustment: s.adjustment || null,
           confirmed,
           unconfirmed,
           pr: false,
@@ -454,9 +568,9 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
       durationSec: Math.max(1, Math.round((endedAt - sessionStart.current) / 1000)),
       plan,
       exercises,
-      adjusted: opts.adjusted || null,
+      adjusted: opts.adjusted || (painStop ? { reason: 'dolor' } : null),
     };
-    const records = newRecords(data, workout);
+    const records = (painStop ? [] : newRecords(data, workout));
     records.forEach((r) => {
       const e = workout.exercises[r.exIndex];
       const s = e && e.sets[r.setIndex];
@@ -640,6 +754,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
               </Card>
               {!!rec.warning && <T style={{ fontSize: 11, lineHeight: 16, color: C.warn }}>{rec.warning}</T>}
               {!!rec.restInsight && <T style={{ fontSize: 11, lineHeight: 16, color: C.warn }}>{rec.restInsight.text}</T>}
+              {!!(rec.deload && rec.deload.active) && <T style={{ fontSize: 11, lineHeight: 16, color: C.warn }}>{rec.deload.text}</T>}
               <View style={{ flex: 1 }} />
               <Btn
                 label={insufficient ? 'Empezar' : (bodyweight ? 'Empezar' : `Usar ${toU(rec.weightKg, u)} ${u}`)}
@@ -654,7 +769,12 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
   }
 
   if (phase === 'start') {
-    const w = effectiveWeightKg;
+    const setNow = cur.sets[setIndex] || {};
+    const guide = setNow.guide || {};
+    const wDisp = setNow.w || (guide.weightKg > 0 ? String(toU(guide.weightKg, u)) : '');
+    const weightText = wDisp ? `${wDisp} ${u}` : (isBodyweightExercise ? 'peso corporal' : 'elige peso');
+    const startReps = setNow.r || guide.reps || rec.targetReps || cur.ex.reps;
+    const startRir = setNow.rir != null ? setNow.rir : (guide.rir != null ? guide.rir : targetRir(rec));
     return (
       <Animated.View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, transform: [{ translateY: y }] }}>
         <LinearGradient colors={[C.bgTop, C.bgBot]} locations={[0, 0.38]} style={{ flex: 1, ...commonPad }}>
@@ -679,7 +799,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
               <View style={{ alignItems: 'center' }}>
                 <T style={{ fontSize: 24, fontWeight: '700', letterSpacing: -0.5 }}>Toca para iniciar</T>
                 <T style={{ fontSize: 15, color: C.mute, marginTop: 6 }}>
-                  {w != null && w > 0 ? `${toU(w, u)} ${u}` : (w === 0 ? 'peso corporal' : 'elige peso')} × {rec.targetReps || cur.ex.reps} · el cronómetro empieza al tocar
+                  {weightText} × {startReps} · RIR {startRir} · el cronómetro empieza al tocar
                 </T>
               </View>
               <View style={{ flex: 1 }} />
@@ -706,16 +826,30 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
               </View>
               <View style={{ alignItems: 'center', marginVertical: 8 }}>
                 <Ring progress={progress} center={
-                  <View style={{ alignItems: 'center' }}>
+                  <View style={{ alignItems: 'center', paddingHorizontal: 10 }}>
                     <T style={{ fontSize: 14, color: C.mute }}>Tiempo habitual 25 a 45 s</T>
                     <T style={{ fontSize: 64, fontWeight: '700', letterSpacing: -1.9, fontVariant: ['tabular-nums'], marginTop: 4 }}>{mm(secs)}</T>
-                    <T style={{ fontSize: 12, color: C.mute, marginTop: 4 }}>criterio de la app</T>
+                    {(() => {
+                      const curSet = cur.sets[setIndex] || {};
+                      const setGuide = curSet.guide || {};
+                      const recWKg = Number(setGuide.weightKg) !== 0 ? Number(setGuide.weightKg) : Number(rec.weightKg);
+                      if (!recWKg || recWKg <= 0) return <T style={{ fontSize: 12, color: C.mute, marginTop: 4 }}>criterio de la app</T>;
+                      const recWDisp = Math.round(toU(recWKg, u) * 10) / 10;
+                      return (
+                        <T style={{ fontSize: 12, color: C.accent, fontWeight: '600', marginTop: 4, textAlign: 'center' }}>
+                          Recomendado: {recWDisp} {u}
+                        </T>
+                      );
+                    })()}
                   </View>
                 } />
               </View>
               <View style={{ flex: 1 }} />
               <Btn label="Terminar serie" onPress={finishRunning} />
-              <Btn kind="ghost" label="Cancelar serie" onPress={cancelRunning} style={{ backgroundColor: C.ghost }} />
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <Btn kind="ghost" label="Cancelar serie" onPress={cancelRunning} style={{ backgroundColor: C.ghost, flex: 1 }} />
+                <Btn kind="ghost" label="Dolor" icon="bandage-outline" onPress={markPain} style={{ backgroundColor: C.ghost, flex: 1 }} />
+              </View>
             </View>
           </ScrollView>
         </LinearGradient>
@@ -726,7 +860,8 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
   if (phase === 'register') {
     const rir = reg.rir;
     const repsNum = parseInt(String(reg.r)) || 0;
-    const targetReps = rec.targetReps || cur.ex.reps || 0;
+    const setGuide = cur.sets[setIndex]?.guide || {};
+    const targetReps = setGuide.reps || rec.targetReps || cur.ex.reps || 0;
     const happy = repsNum >= targetReps && (rir === null || (rir >= 1 && rir <= 3));
     const alertMood = rir === 0 && repsNum < targetReps;
     const mood = alertMood ? 'alert' : (happy ? 'happy' : 'neutral');
@@ -786,9 +921,23 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                   <View>
-                    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 2 }}>
-                      <T style={{ fontSize: 38, fontWeight: '700', letterSpacing: -1.1, fontVariant: ['tabular-nums'], opacity: regConfirmed.w ? 1 : 0.4 }}>{reg.w.toString().replace('.', ',')}</T>
-                      <T style={{ fontSize: 16, color: C.mute, fontWeight: '500' }}>{u}</T>
+                    <View style={{ flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: 10, marginTop: 2 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+                        <T style={{ fontSize: 38, fontWeight: '700', letterSpacing: -1.1, fontVariant: ['tabular-nums'], opacity: regConfirmed.w ? 1 : 0.4 }}>{reg.w.toString().replace('.', ',')}</T>
+                        <T style={{ fontSize: 16, color: C.mute, fontWeight: '500' }}>{u}</T>
+                      </View>
+                      {(() => {
+                        const curSet = cur.sets[setIndex] || {};
+                        const setGuide = curSet.guide || {};
+                        const recWKg = Number(setGuide.weightKg) !== 0 ? Number(setGuide.weightKg) : Number(rec.weightKg);
+                        if (!recWKg || recWKg <= 0) return null;
+                        const recWDisp = Math.round(toU(recWKg, u) * 10) / 10;
+                        return (
+                          <T style={{ fontSize: 13, color: C.mute, fontWeight: '500' }}>
+                            Recomendado: {recWDisp} {u}
+                          </T>
+                        );
+                      })()}
                     </View>
                   </View>
                   <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -800,6 +949,105 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
                     </Press>
                   </View>
                 </View>
+
+                {(() => {
+                  const loadType = rec.loadType || cur.ex.loadType || 'barbell';
+                  return (
+                    <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.line }}>
+                      {loadType === 'dumbbell' && (
+                        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                          <T style={{ fontSize: 12, color: C.mute }}>Modo:</T>
+                          {[
+                            { id: 'perSide', label: 'Por mano (c/u)' },
+                            { id: 'total', label: 'Total' },
+                          ].map((m) => {
+                            const on = dumbbellMode === m.id;
+                            return (
+                              <Press
+                                key={m.id}
+                                onPress={() => setDumbbellMode(m.id)}
+                                style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: on ? C.accent : C.card2, borderWidth: 1, borderColor: on ? C.accent : C.line }}
+                              >
+                                <T style={{ fontSize: 11, fontWeight: '700', color: on ? C.accentText : C.text }}>{m.label}</T>
+                              </Press>
+                            );
+                          })}
+                        </View>
+                      )}
+
+                      {(loadType === 'barbell' || loadType === 'plates') && (
+                        <View>
+                          <Press
+                            onPress={() => setShowPlateBuilder((v) => !v)}
+                            style={{ alignSelf: 'stretch', backgroundColor: showPlateBuilder ? C.accent : C.card2, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: showPlateBuilder ? C.accent : C.line, alignItems: 'center', justifyContent: 'center' }}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Ionicons name="layers-outline" size={15} color={showPlateBuilder ? C.accentText : C.accent} />
+                              <T style={{ fontSize: 13, fontWeight: '700', color: showPlateBuilder ? C.accentText : C.accent }}>{showPlateBuilder ? 'Cerrar selector de discos' : 'Armar con discos por lado'}</T>
+                            </View>
+                          </Press>
+
+                          {showPlateBuilder && (
+                            <View style={{ marginTop: 10, padding: 12, backgroundColor: C.card2, borderRadius: 16, borderWidth: 1, borderColor: C.line, gap: 8 }}>
+                              <T style={{ fontSize: 12, fontWeight: '700', color: C.text }}>Discos por lado</T>
+                              {(() => {
+                                const plates = u === 'lb' ? (data.gym?.platesLb || [45, 35, 25, 10, 5, 2.5]) : (data.gym?.platesKg || [25, 20, 15, 10, 5, 2.5, 1.25]);
+                                const baseKg = loadType === 'barbell'
+                                  ? (data.gym?.bars?.find((b) => b.id === data.gym?.defaultBarId)?.weightKg ?? 20)
+                                  : (data.gym?.countCarriage ? (data.gym?.carriageKg || 0) : 0);
+                                const baseU = toU(baseKg, u);
+                                const curW = parseFloat(String(reg.w).replace(',', '.')) || 0;
+                                const breakdown = plateBreakdown(curW, baseU, plates);
+                                const counts = {};
+                                for (const p of breakdown.platesPerSide) {
+                                  counts[p] = (counts[p] || 0) + 1;
+                                }
+                                return (
+                                  <View style={{ gap: 6 }}>
+                                    <T style={{ fontSize: 11, color: C.mute }}>Base ({loadType === 'barbell' ? 'Barra' : 'Carro'}): {baseU} {u}</T>
+                                    {plates.map((plate) => {
+                                      const count = counts[plate] || 0;
+                                      return (
+                                        <View key={plate} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: C.card, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 10 }}>
+                                          <T style={{ fontSize: 12, fontWeight: '600' }}>{plate} {u} <T style={{ fontSize: 10, color: C.mute }}>(por lado)</T></T>
+                                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                            <Press
+                                              onPress={() => {
+                                                if (count > 0) {
+                                                  const newW = Math.max(baseU, curW - 2 * plate);
+                                                  setReg((p) => ({ ...p, w: String(Math.round(newW * 100) / 100) }));
+                                                  setRegConfirmed((c) => ({ ...c, w: true }));
+                                                }
+                                              }}
+                                              style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}
+                                            >
+                                              <Ionicons name="remove" size={16} color={C.text} />
+                                            </Press>
+                                            <T style={{ fontSize: 14, fontWeight: '700', minWidth: 20, textAlign: 'center' }}>{count}</T>
+                                            <Press
+                                              onPress={() => {
+                                                const newW = curW + 2 * plate;
+                                                setReg((p) => ({ ...p, w: String(Math.round(newW * 100) / 100) }));
+                                                setRegConfirmed((c) => ({ ...c, w: true }));
+                                              }}
+                                              style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}
+                                            >
+                                              <Ionicons name="add" size={16} color={C.text} />
+                                            </Press>
+                                          </View>
+                                        </View>
+                                      );
+                                    })}
+                                  </View>
+                                );
+                              })()}
+                            </View>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  );
+                })()}
               </View>
               <View style={{ backgroundColor: C.card, borderRadius: 26, paddingVertical: 12, paddingHorizontal: 18, borderWidth: 1, borderColor: C.line }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -824,6 +1072,9 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
                 <Press onPress={backRegister} style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
                   <Ionicons name="arrow-back" size={24} color={C.text} />
                 </Press>
+                <Press onPress={markPain} style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="bandage-outline" size={24} color={C.warn} />
+                </Press>
                 <Btn label="Guardar serie" iconRight="arrow-forward" onPress={saveRegister} style={{ flex: 1 }} />
               </View>
             </View>
@@ -836,8 +1087,14 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
   if (phase === 'rest') {
     const progress = Math.min(elapsedRest / Math.max(1, restTarget), 1);
     const nextSetNum = setIndex + 1;
-    const w = effectiveWeightKg;
-    const reps = rec.targetReps || cur.ex.reps;
+    const nextSetData = cur.sets[setIndex] || {};
+    const nextGuide = nextSetData.guide || {};
+    const nextWDisp = nextSetData.w || (nextGuide.weightKg > 0 ? String(toU(nextGuide.weightKg, u)) : '');
+    const nextWeightText = nextWDisp ? `${nextWDisp} ${u}` : (isBodyweightExercise ? 'peso corporal' : 'elige peso');
+    const nextReps = nextSetData.r || nextGuide.reps || rec.targetReps || cur.ex.reps;
+    const nextRir = nextSetData.rir != null ? nextSetData.rir : (nextGuide.rir != null ? nextGuide.rir : targetRir(rec));
+    const nextRest = Number(nextGuide.restSec) || restTarget || rec.restSec;
+    const lastAdjustment = (cur.sets[setIndex - 1] || {}).adjustment || null;
     return (
       <Animated.View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, transform: [{ translateY: y }] }}>
         <LinearGradient colors={[C.bgTop, C.bgBot]} locations={[0, 0.38]} style={{ flex: 1, ...commonPad }}>
@@ -865,15 +1122,45 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
                 } />
               </View>
               <Card style={{ paddingVertical: 12, paddingHorizontal: 18, borderRadius: 26 }}>
-                <T style={{ fontSize: 12, fontWeight: '600', color: C.mute, letterSpacing: 1.2 }}>SIGUE</T>
-                <T style={{ fontSize: 15, fontWeight: '700', marginTop: 4 }}>Serie {nextSetNum} · {w != null && w > 0 ? `${toU(w, u)} ${u}` : 'peso corporal'} × {reps}</T>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <T style={{ fontSize: 12, fontWeight: '600', color: C.mute, letterSpacing: 1.2 }}>SIGUE</T>
+                  <Press onPress={editingNext ? saveEditNext : openEditNext} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4 }}>
+                    <Ionicons name={editingNext ? 'checkmark' : 'create-outline'} size={15} color={C.accent} />
+                    <T style={{ fontSize: 12, fontWeight: '700', color: C.accent }}>{editingNext ? 'Listo' : 'Editar'}</T>
+                  </Press>
+                </View>
+                {editingNext ? (
+                  <View style={{ marginTop: 10, gap: 10 }}>
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                      <View style={{ flex: 1 }}>
+                        <T style={{ fontSize: 11, color: C.mute, marginBottom: 4 }}>Peso ({u})</T>
+                        <Field value={editW} onChangeText={setEditW} keyboardType="decimal-pad" placeholder="0" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <T style={{ fontSize: 11, color: C.mute, marginBottom: 4 }}>Reps</T>
+                        <Field value={editR} onChangeText={setEditR} keyboardType="number-pad" placeholder="0" />
+                      </View>
+                    </View>
+                    <T style={{ fontSize: 11, lineHeight: 16, color: C.mute }}>Puedes ajustarlo o dejar el plan de Atlas tal como está.</T>
+                  </View>
+                ) : (
+                  <T style={{ fontSize: 15, fontWeight: '700', marginTop: 4 }}>Serie {nextSetNum} · {nextWeightText} × {nextReps} · RIR {nextRir} · {mm(nextRest)}</T>
+                )}
+                {!!lastAdjustment && <T style={{ fontSize: 12, lineHeight: 17, color: C.mute, marginTop: 6 }}>{lastAdjustment}</T>}
+                <Press onPress={() => setWhy([RULES.autoreg, RULES.rirTarget, RULES.pain])} style={{ marginTop: 8, alignSelf: 'flex-start' }}>
+                  <T style={{ fontSize: 12, fontWeight: '600', color: C.accent }}>Por qué</T>
+                </Press>
               </Card>
               <View style={{ flex: 1 }} />
               <Btn label={`Empezar serie ${nextSetNum}`} onPress={() => startRunning(setIndex)} />
-              <Btn kind="ghost" label="Añadir 30 s" onPress={() => setRestTarget((t) => t + 30)} style={{ backgroundColor: C.ghost }} />
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <Btn kind="ghost" label="Añadir 30 s" onPress={() => setRestTarget((t) => t + 30)} style={{ backgroundColor: C.ghost, flex: 1 }} />
+                <Btn kind="ghost" label="Dolor" icon="bandage-outline" onPress={markPain} style={{ backgroundColor: C.ghost, flex: 1 }} />
+              </View>
             </View>
           </ScrollView>
         </LinearGradient>
+        <RuleInfo visible={!!why} rules={why || []} onClose={() => setWhy(null)} />
       </Animated.View>
     );
   }
@@ -881,16 +1168,6 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
   if (phase === 'summary') {
     const sc = exScore;
     const mood = sc && sc.score >= 75 ? 'happy' : 'neutral';
-    const kcalLine = (() => {
-      if (!bodyKg) return 'Agrega tu peso en el perfil para ver kcal.';
-      const db = exerciseById(cur.ex.id);
-      const met = db ? db.met : 3.5;
-      const first = cur.sets.find((s) => s.startedAt);
-      const last = [...cur.sets].reverse().find((s) => s.endedAt);
-      const sec = first && last ? Math.max(0, (last.endedAt - first.startedAt) / 1000) : 0;
-      const kcal = met * bodyKg * (sec / 3600);
-      return `≈ ${Math.round(kcal)} kcal estimadas (MET × peso × horas).`;
-    })();
     const finalText = sumCoachMsg || (sc && sc.score >= 75 ? 'Cumpliste con margen.' : (sc && sc.score >= 60 ? 'Aceptable.' : 'A revisar el ritmo.'));
     return (
       <Animated.View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, transform: [{ translateY: y }] }}>
@@ -933,7 +1210,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
                   </View>
                 ))}
               </Card>
-              <T style={{ fontSize: 13, color: C.mute, textAlign: 'center' }}>{kcalLine} {finalText}</T>
+              <T style={{ fontSize: 13, color: C.mute, textAlign: 'center' }}>{finalText}</T>
               <View style={{ flex: 1 }} />
               <Btn label={isLast ? 'Terminar sesión' : 'Siguiente ejercicio'} onPress={handleFinishPress} />
             </View>

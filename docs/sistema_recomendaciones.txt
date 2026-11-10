@@ -25,3 +25,18 @@ El motor toma en cuenta el perfil del usuario para personalizar cada recomendaci
 5. DESCANSO Y ESFUERZO (RIR)
 - Los tiempos de descanso se adaptan al tipo de ejercicio (compuesto o de aislamiento) y al objetivo del usuario, respaldados por estudios científicos (como Grgic et al., 2017).
 - Se evalúa el esfuerzo real mediante el RIR (Repeticiones en Reserva) para calibrar la intensidad y calcular el puntaje de la sesión.
+
+6. AUTORREGULACIÓN EN VIVO
+- Después de cada serie, Atlas compara reps, RIR, descanso real y e1RM con el objetivo de esa serie.
+- Si la serie queda claramente fuera de rango (al menos 1 repetición o 1 punto de RIR), ajusta el peso un paso redondeado al equipo disponible. Si no, ajusta repeticiones y descanso.
+- RIR 0 se trata como fallo: baja un paso y suma 60 s de descanso.
+- Si falta el RIR o la serie está sin confirmar, no cambia el peso.
+- En peso corporal progresa por repeticiones o lastre, sin inventar peso.
+- La tarjeta SIGUE muestra la siguiente serie y el motivo del ajuste; puedes editarla o marcar Dolor.
+- Si dos sesiones seguidas muestran una caída clara del e1RM, Atlas avisa de una posible descarga.
+- Fuentes: Helms et al. (2018), Ormsbee et al. (2019), Greig et al. (2020), Mann et al. (2010), Zourdos et al. (2016) y criterio de la app.
+
+7. PUNTAJE CONTRA EL PLAN VIVO
+- El puntaje compara cada serie contra el guide que Atlas fijó para esa serie, no contra el plan original.
+- Así, seguir un ajuste de Atlas no penaliza al usuario.
+- Si hubo dolor, la sesión se protege y no se cuentan récords.

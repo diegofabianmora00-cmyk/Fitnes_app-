@@ -18,10 +18,11 @@ Este documento detalla las reglas, heurísticas y fórmulas científicas o de cr
 - **Criterio de la app:** Récord de peso (máxima carga levantada con al menos 1 repetición) y récord de repeticiones (mayor número de repeticiones a una carga dada).
 - **e1RM (Estimación de 1 Repetición Máxima):** Se calcula utilizando la fórmula estándar de **Epley** ($1RM = w \times (1 + \frac{r}{30})$), ampliamente validada en literatura de fuerza.
 
-## 5. Puntaje de Sesión (v4)
+## 5. Puntaje de Sesión (v5)
 - **Criterio de la app, apoyado en evidencia sobre dosis, esfuerzo y carga:**
   - **Pesos (Intermedios/Avanzados):** 40% Plan cumplido, 20% Carga (tope en 100%), 25% Esfuerzo (RIR), 10% Descanso, 5% Progreso.
   - **Pesos (Principiantes):** 45% Plan cumplido, 20% Carga, 15% Esfuerzo (RIR), 15% Descanso, 5% Progreso.
+  - **Plan vivo (`guide`):** cada serie se compara contra el peso, reps, RIR y descanso que Atlas fijó para esa serie después del ajuste en vivo. Si el usuario sigue a Atlas, no se le penaliza por haber cambiado el plan original.
   - **Ajuste intencional (`adjusted`):** Si el usuario ajusta por cansancio/poco tiempo, se omite la penalización de carga o plan no realizado. Si es por dolor, la sesión se protege ("Sesión protegida", puntaje nulo de apoyo).
   - **Tolerancia al descanso:** Descansar de más penaliza de forma mucho más suave que descansar de menos.
   - **Datos insuficientes:** Se requiere al menos 1 serie confirmada para puntuar; de lo contrario se indica "Datos insuficientes".
@@ -48,3 +49,15 @@ Este documento detalla las reglas, heurísticas y fórmulas científicas o de cr
 - **Chequeo de energía:** Con energía baja registrada en el check-in diario (`checkin.level === 'cansado'`), se recomienda mantener el peso ese día.
 - **Series que mandan:** La última sesión y sus series confirmadas (excluyendo `unconfirmed: true`) son las que mandan para la recomendación.
 - **Fuentes y etiquetas:** Las heurísticas propias de la aplicación se etiquetan como "criterio de la app", diferenciándolas de la literatura científica (ACSM, Zourdos, Grgic, NSCA).
+
+## 9. Autoregulación en Vivo
+- **Fuentes:** Helms et al. (2018); Ormsbee et al. (2019); Greig et al. (2020); Mann et al. (2010); Zourdos et al. (2016); Refalo et al. (2023); criterio de la app.
+- **e1RM ajustado por RIR:** `peso × (1 + (reps + RIR) / 30)`. Solo se usa si hay peso, reps y `reps + RIR <= 15`.
+- **Siguiente serie:** se compara la serie recién hecha con el objetivo de reps y RIR. Si queda claramente fuera de rango (al menos 1 rep o 1 punto de RIR), se cambia el peso un paso redondeado al equipo; si no, se ajustan reps y descanso. Hay histéresis y nunca se sube y baja en la misma decisión.
+- **Fallo (RIR 0):** se baja un paso, se suman 60 s de descanso y se valora una serie menos si la primera serie fue muy inferior al rendimiento reciente.
+- **Día flojo / fuerte:** primera serie por debajo del 90% del mejor e1RM reciente mantiene el peso y sube el RIR objetivo; por encima del 105% con RIR alto sube un paso.
+- **Descanso real:** por debajo del 80% del objetivo suma 30 s; por encima del 130% avisa y, si fue fácil, resta 15 s.
+- **Sin RIR o serie sin confirmar:** no se cambia el peso; solo reps y descanso.
+- **Peso corporal:** se progresa por reps o lastre, sin inventar peso.
+- **Dolor:** el botón Dolor detiene el ejercicio, protege la sesión y no cuenta PR.
+- **Deload:** dos sesiones seguidas con caída clara (más del 5%) del e1RM generan un aviso de descarga.

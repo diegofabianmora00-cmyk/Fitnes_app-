@@ -35,7 +35,7 @@ export default function CoachCard({ data, onSelectExercise }) {
   return (
     <View style={{ gap: 12, marginTop: 12 }}>
       <Card style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-        <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: C.card2, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' }}>
+        <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: C.card2, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
           <Coach mood={msg.mood || 'neutral'} size="sm" />
         </View>
         <T style={{ flex: 1, fontSize: 14, color: C.softText, lineHeight: 20 }}>{msg.text}</T>
@@ -43,7 +43,7 @@ export default function CoachCard({ data, onSelectExercise }) {
 
       {stalledEx && (
         <Card style={{ padding: 16, flexDirection: 'row', gap: 14, alignItems: 'flex-start' }}>
-          <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: C.card2, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: C.card2, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
             <Coach mood="alert" size="sm" />
           </View>
           <View style={{ flex: 1 }}>

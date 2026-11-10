@@ -53,6 +53,26 @@ describe('coachMemory', () => {
       expect(facts.costExercises.length).toBeGreaterThan(0);
       expect(facts.costExercises[0].exId).toBe('press');
     });
+
+    it('usa la serie actual cuando se la pasa en vivo', () => {
+      const facts = calculateFacts({ workouts: [] }, NOW, {
+        name: 'Press de banca',
+        targetReps: 10,
+        set: { w: 60, r: 9, rir: 0 },
+      });
+      expect(facts.currentSet).toEqual({
+        name: 'Press de banca',
+        reps: 9,
+        rir: 0,
+        weightKg: 60,
+        targetReps: 10,
+        adjustment: null,
+      });
+      const res = getCoachMessage('tras_serie', facts, 'directo', []);
+      expect(res.id).toBe('tras_serie_actual');
+      expect(res.texto).toContain('9 reps');
+      expect(res.texto).toContain('RIR 0');
+    });
   });
 
   describe('getCoachMessage', () => {

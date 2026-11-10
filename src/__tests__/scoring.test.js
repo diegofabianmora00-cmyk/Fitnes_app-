@@ -80,7 +80,7 @@ describe('puntaje de sesión v3', () => {
     const review = sessionReview(data(), makeWorkout());
     expect(review.score).toBe(100);
     expect(review.grade).toBe('Excelente');
-    expect(review.v).toBe(4);
+    expect(review.v).toBe(5);
     expect(review.partial).toBe(false);
     expect(review.components.map((c) => c.key).sort()).toEqual(['effort', 'load', 'plan', 'rest']);
   });
@@ -197,6 +197,22 @@ describe('puntaje de sesión v3', () => {
     expect(rest.value).toBeCloseTo(0.7, 2);
     expect(review.score).toBeLessThan(100);
   });
+
+  it('puntúa contra el plan vivo ajustado y no penaliza seguir a Atlas', () => {
+    const guide = (weightKg) => ({ weightKg, reps: 10, rir: 2, restSec: 120 });
+    const workout = makeWorkout({
+      exercises: [makePerformed({
+        sets: [
+          { ...makeSet(60, 10), guide: guide(60) },
+          { ...makeSet(50, 10), guide: guide(50), adjustment: 'Bajé a 50 kg porque la serie 1 quedó a RIR 0.' },
+          { ...makeSet(50, 10), guide: guide(50) },
+        ],
+      })],
+    });
+    const review = sessionReview(data(), workout);
+    expect(review.score).toBe(100);
+    expect(review.components.find((c) => c.key === 'load').value).toBe(1);
+  });
 });
 
 describe('ejercicio y migración de puntajes v4', () => {
@@ -205,7 +221,7 @@ describe('ejercicio y migración de puntajes v4', () => {
       targetRir: 2,
       sets: [makeSet(60, 10), makeSet(60, 10), makeSet(60, 10)],
     }));
-    expect(review.v).toBe(4);
+    expect(review.v).toBe(5);
     expect(review.score).toBe(100);
     expect(review.components.some((c) => c.key === 'progress')).toBe(false);
   });
@@ -215,7 +231,7 @@ describe('ejercicio y migración de puntajes v4', () => {
     const review = sessionReview(data(), workout);
     expect(review.score).toBeNull();
     expect(review.grade).toBe('Sesión protegida');
-    expect(review.v).toBe(4);
+    expect(review.v).toBe(5);
   });
 
   it('devuelve datos insuficientes si no hay series confirmadas', () => {
@@ -225,14 +241,14 @@ describe('ejercicio y migración de puntajes v4', () => {
     const review = sessionReview(data(), workout);
     expect(review.score).toBeNull();
     expect(review.grade).toBe('Datos insuficientes');
-    expect(review.v).toBe(4);
+    expect(review.v).toBe(5);
   });
 
-  it('rescoreWorkouts recalcula viejos a v4 y es idempotente', () => {
+  it('rescoreWorkouts recalcula viejos a v5 y es idempotente', () => {
     const old = makeWorkout({ score: { score: 12, v: 3 } });
     const first = rescoreWorkouts(data([old]));
     const second = rescoreWorkouts(first);
-    expect(first.workouts[0].score.v).toBe(4);
+    expect(first.workouts[0].score.v).toBe(5);
     expect(first.workouts[0].score.score).toBeGreaterThan(0);
     expect(second.workouts[0].score.score).toBe(first.workouts[0].score.score);
   });

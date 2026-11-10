@@ -1,4 +1,4 @@
-export function calculateFacts(data = {}, now = Date.now()) {
+export function calculateFacts(data = {}, now = Date.now(), live = null) {
   const workouts = [...(data.workouts || [])].sort((a, b) => (b.date || 0) - (a.date || 0));
 
   const validWorkouts = workouts.filter((w) => {
@@ -97,6 +97,16 @@ export function calculateFacts(data = {}, now = Date.now()) {
     }
   });
 
+  const liveSet = live && live.set;
+  const currentSet = liveSet && Number(liveSet.r) > 0 ? {
+    name: live.name || 'este ejercicio',
+    reps: Number(liveSet.r) || 0,
+    rir: liveSet.rir === null || liveSet.rir === undefined || liveSet.rir === '' ? null : Number(liveSet.rir),
+    weightKg: Number(liveSet.w) || 0,
+    targetReps: Number(live.targetReps) || 0,
+    adjustment: liveSet.adjustment || null,
+  } : null;
+
   return {
     streak,
     daysSinceLast,
@@ -104,6 +114,7 @@ export function calculateFacts(data = {}, now = Date.now()) {
     costExercises,
     improvedExercises,
     hasHistory: validWorkouts.length > 0,
+    currentSet,
   };
 }
 
@@ -161,6 +172,14 @@ const TEMPLATES = [
   },
 
   // --- TRAS_SERIE ---
+  {
+    id: 'tras_serie_actual',
+    context: 'tras_serie',
+    check: (f) => !!f.currentSet,
+    directo: (f) => `${f.currentSet.reps} reps${f.currentSet.rir !== null ? ` a RIR ${f.currentSet.rir}` : ''}. Serie registrada.`,
+    motivador: (f) => `¡Serie guardada! ${f.currentSet.reps} reps${f.currentSet.rir !== null ? ` con RIR ${f.currentSet.rir}` : ''}.`,
+    tranquilo: (f) => `Serie registrada: ${f.currentSet.reps} reps${f.currentSet.rir !== null ? ` a RIR ${f.currentSet.rir}` : ''}.`,
+  },
   {
     id: 'tras_improved',
     context: 'tras_serie',

@@ -20,7 +20,7 @@ no los crees ni los edites.
   options)` compatible con Alert y `DialogHost` montado una vez en App.js.
 - src/store.js: StoreProvider y useStore() → { data, update, ready }. Helpers: uid, KG,
   toU(kg,u), fromU(v,u), lastSets(data,exId) y migrate() (normaliza datos viejos, la
-  rutina inicial e1/e2/e3 y recalcula puntajes viejos a v3).
+  rutina inicial e1/e2/e3 y recalcula puntajes viejos a v5).
 - src/recommend.js: motor puro (sin React). recommendFor (con setPlans, rirTarget, readiness y deload),
   RULES/SOURCES, repRangeFor, restFor, frequencyAdvice, restFeedback, personalRecords, newRecords,
   sessionReview, exerciseReview, rescoreWorkouts, routineScores, weekSummary y coachMessage.
@@ -34,17 +34,18 @@ no los crees ni los edites.
 - src/CustomExerciseModal.js: modal para crear un ejercicio propio (nombre, grupo y
   equipo obligatorios; tipo y músculos opcionales). Guarda en data.customExercises.
 - src/RuleInfo.js: modal que explica reglas y fuentes.
-- src/SessionReview.js: celebración de PR y resumen/puntaje de sesión.
+- src/SessionReview.js: celebración de PR y resumen/puntaje de sesión, con ajustes en vivo y dolor.
 - src/screens/Home.js: mensaje de Atlas, reglas, siguiente rutina, semana.
 - src/screens/home/DayHeader.js, AtlasMessage.js, TodayGoal.js, TomorrowCard.js, NearRecordCard.js, QuickSummary.js: componentes modulares de la interfaz de Inicio (estado día de descanso).
 - src/screens/Routines.js: pestaña "Mi semana" y asistente de 2 pasos para crear/editar rutinas y configurar ejercicios.
 - src/screens/ProfileSetup.js: cuestionario inicial / edición del perfil.
 - src/screens/Workout.js: overlay con Iniciar/Terminar serie, descanso real, RIR,
-  guardado de la sesión, PR y resumen.
+  guide inicial y ajuste en vivo con nextSetPlan, tarjeta SIGUE con edición y "Por qué",
+  botón Dolor, guardado de la sesión, PR y resumen.
 - src/screens/Progress.js: estadísticas, gráfica de área SVG con filtros de métrica y ejercicio, racha, aviso de estancamiento, récords, músculos trabajados e historial paginado.
 - src/screens/progress/StreakCard.js, PeriodPicker.js, ProgressChart.js, StatGrid.js, CoachCard.js, PrCard.js, MuscleCard.js, RoutineScoresCard.js, HistoryList.js, SessionDetail.js, EmptyProgress.js: componentes modulares de la interfaz de Progreso.
 - src/Settings.js: kg/lb, editar perfil, exportar, borrar datos.
-- src/coachMemory.js: cerebro de los mensajes de Atlas (lógica pura y plantillas).
+- src/coachMemory.js: cerebro de los mensajes de Atlas (lógica pura y plantillas); puede usar la serie actual en vivo.
 - src/version.js: versión instalada (desde app.json) y comparación de versiones (puro).
 - src/updates.js: consulta update.json remoto, descarga e instala el APK dentro de la app y guarda la versión ya avisada (AsyncStorage).
 - src/UpdatePrompt.js: diálogos de nueva versión, "Actualizar ahora" y "Continuar con mi versión actual".
@@ -53,7 +54,7 @@ no los crees ni los edites.
 - src/__tests__/load.test.js: pruebas unitarias de tipos de carga, cálculos, desglose de discos, pesos armables, factor de volumen y migración (jest).
 - src/__tests__/autoreg.test.js: pruebas unitarias del motor de autoregulación en vivo (jest).
 - src/__tests__/recommend.test.js: pruebas unitarias del motor puro (jest).
-- src/__tests__/scoring.test.js: pruebas del puntaje de sesión v3, recalculo y puntaje por rutina (jest).
+- src/__tests__/scoring.test.js: pruebas del puntaje de sesión v5, recalculo, guide vivo y puntaje por rutina (jest).
 - src/__tests__/coachMemory.test.js: pruebas unitarias del cerebro de mensajes de Atlas (jest).
 - src/__tests__/version.test.js: pruebas de comparación de versiones (jest).
 - docs/decisiones.md: reglas del motor (progresión, estancamiento, descanso, PR, puntaje, e1RM y racha).
@@ -71,7 +72,7 @@ Claves de AsyncStorage:
   se borra al terminar o descartar.
 - fitnesscoach:v1:update: última versión avisada por el sistema de actualizaciones; evita
   repetir el aviso automático de la misma versión.
-data = { schemaVersion: 5, unit, gym: { bars, defaultBarId, platesKg, platesLb, dumbbellStep, stackStep, carriageKg, countCarriage }, checkin: { date, level },
+data = { schemaVersion: 6, unit, gym: { bars, defaultBarId, platesKg, platesLb, dumbbellStep, stackStep, carriageKg, countCarriage }, checkin: { date, level },
 profile: { goal, environment, ambition, level, daysPerWeek, weightKg, heightCm, age, sex,
   activityLevel, jointFocus, restStyle, tone, completed, updatedAt },
 coachMemory: [string], // últimos 8 ids de mensajes mostrados por Atlas
@@ -81,14 +82,17 @@ workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName, 
   adjusted: { reason }, // opcional: cansancio, dolor, poco tiempo, mal sueño
   prs: [{ exId, name, kind, weightKg, reps }],
   plan: [{ exId, name, group, type, loadType, targetReps, targetSets, targetRestSec, targetRir, recWeightKg }], // foto del plan al terminar; incluye ejercicios saltados
-  score: { score, grade, components: [{ key, label, value, weight }], restNotes, durationSec, v: 4, partial, missed: [{ exId, name }], adjusted },
+  score: { score, grade, components: [{ key, label, value, weight }], restNotes, durationSec, v: 5, partial, missed: [{ exId, name }], adjusted },
   exercises: [{ exId, name, loadType, targetReps, targetSets, targetRestSec, recWeightKg,
-    sets: [{ w, r, rir, failure, startedAt, endedAt, restBeforeSec, pr,
+    sets: [{ w, r, rir, failure, startedAt, endedAt, restBeforeSec,
+      guide: { weightKg, reps, rir, restSec }, adjustment, pr,
       confirmed: { r, w, rir }, unconfirmed }] }] }] }
 // sets sin `unconfirmed` son datos viejos válidos; `unconfirmed: true` los excluye de
 // motor, PR y puntaje. Pesos en kg; unit ausente se lee como kg. `w` guardado se conserva intacto en la migración a schemaVersion 5.
+// `guide` guarda el plan vivo de esa serie en kg (peso, reps, RIR y descanso) y `adjustment` el motivo del ajuste aplicado tras ella; ambos son opcionales y se normalizan en la migración a schemaVersion 6.
+// `schemaVersion` 6: normaliza `sets[].guide` (números) y `adjustment`; los sets viejos sin guide siguen funcionando.
 // `schemaVersion` 5: añade `gym` y `loadType` ('barbell' | 'dumbbell' | 'stack' | 'plates' | 'bodyweight' | 'plain') a ejercicios del catálogo y personalizados.
-// `score.v` 4: pesos adaptativos según nivel (principiante vs intermedio), ajuste intencional (`adjusted`), tolerancia al descanso asimétrica (exceso penaliza menos), mínimo de 1 serie confirmada. `partial` marca sesiones viejas sin plan completo.
+// `score.v` 5: puntúa contra el `guide` vivo de cada serie (no contra el plan original) y conserva los pesos adaptativos por nivel, el ajuste intencional (`adjusted`), la tolerancia al descanso asimétrica y el mínimo de 1 serie confirmada. `partial` marca sesiones viejas sin plan completo.
 // workouts: el más reciente primero. El id del ejercicio es el de src/exercises.js.
 
 ## Reglas
@@ -133,7 +137,7 @@ workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName, 
   Si la app no abre, detente y avísame; no intentes instalar ni configurar cosas por tu cuenta.
 
 ## Estado
-- Hecho: app base, base de ejercicios (79), perfil, motor de recomendación, entrenamiento guiado, calorías, gráficas básicas, pruebas del motor y puntaje (54), rediseño completo de la pestaña Rutinas (+buscador, ejercicios personalizados en data.customExercises, vista de detalle de rutina hecha con descanso, RIR, botón "EDITAR" y reordenamiento de ejercicios con `↑`/`↓`), rediseño completo de la pestaña Progreso (con filtros e historial agrupado por mes), rediseño completo de la pestaña Inicio, puntaje de sesión v4, rediseño completo de la pestaña Ajustes, y Prompt 1 (sistema de tipos de carga: datos, funciones puras, migración a schemaVersion 5 y pruebas unitarias completas).
-- Hecho (último paso): sistema de actualizaciones con descarga e instalación dentro de la app (expo-file-system + expo-intent-launcher, permiso REQUEST_INSTALL_PACKAGES), aviso de nueva versión y botón "Continuar con mi versión actual"; versión 1.1.2, APK compilado en EAS, 96 pruebas y export de Android verificados. Prompt 2 (autoregulación, readiness, deload) también quedó integrado con sus 96 pruebas en verde.
-- Por confirmar: ninguno (tipografía Inter en H y Btn confirmada y cargada correctamente con expo-google-fonts).
-- Pendiente: ninguno (prototipo completo y pulido).
+- Hecho: app base, base de ejercicios (79), perfil, motor de recomendación, entrenamiento guiado, calorías, gráficas básicas, pruebas del motor y puntaje (54), rediseño completo de la pestaña Rutinas (+buscador, ejercicios personalizados en data.customExercises, vista de detalle de rutina hecha con descanso, RIR, botón "EDITAR" y reordenamiento de ejercicios con `↑`/`↓`), rediseño completo de la pestaña Progreso (con filtros e historial agrupado por mes), rediseño completo de la pestaña Inicio, puntaje de sesión v5, rediseño completo de la pestaña Ajustes, y Prompt 1 (sistema de tipos de carga: datos, funciones puras, migración a schemaVersion 5 y pruebas unitarias completas).
+- Hecho (último paso): Prompts 4 y 5 del sistema en tiempo real (tarjeta SIGUE con descanso, edición de peso/reps, motivo de una línea, "Por qué" y botón Dolor; schemaVersion 6 con guides normalizados en store y borrador, puntaje v5 contra el guide vivo, ajustes/dolor en SessionReview, coachMemory con serie actual y documentación); 99 pruebas y export de Android en verde.
+- Por confirmar: prueba manual del flujo completo en emulador (el dispositivo local se desconectó); la app compila y abre con exp://10.0.2.2:8081 cuando el emulador está disponible.
+- Pendiente: Prompt 6 (pasada final de coherencia) ya revisado en código; solo queda la prueba manual en dispositivo.
