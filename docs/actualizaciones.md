@@ -7,7 +7,7 @@ instalada, muestra el aviso con el botón "Actualizar ahora" y el botón
 
 ## Publicar una versión nueva
 
-1. Sube la versión en `app.json` (ejemplo: `1.1.0` → `1.2.0`) y suma 1 a
+1. Sube la versión en `app.json` (ejemplo: `1.1.2` → `1.2.0`) y suma 1 a
    `android.versionCode`.
 2. Compila el APK:
 
@@ -19,6 +19,12 @@ instalada, muestra el aviso con el botón "Actualizar ahora" y el botón
    - `downloadUrl`: la URL del APK recién compilado.
    - `notes`: un resumen corto de los cambios.
 5. Haz commit y push de `app.json` y `update.json`.
+
+El botón "Actualizar ahora" descarga el APK dentro de la app y abre el instalador
+de Android. Necesita el permiso `REQUEST_INSTALL_PACKAGES` (ya está en `app.json`).
+La primera vez que se pasa de una versión anterior a la 1.1.2 hay que instalar el
+APK a mano; desde la 1.1.2 las siguientes actualizaciones ya se instalan desde la
+propia app.
 
 ## Reglas
 

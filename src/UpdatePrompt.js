@@ -1,6 +1,6 @@
 import { Dialog } from './Dialog';
 import { APP_VERSION } from './version';
-import { openUpdate, setSeenUpdate } from './updates';
+import { downloadAndInstallUpdate, setSeenUpdate } from './updates';
 
 export function promptUpdate(info) {
   if (!info || !info.downloadUrl) return;
@@ -13,12 +13,51 @@ export function promptUpdate(info) {
         text: 'Actualizar ahora',
         onPress: async () => {
           await setSeenUpdate(info.version);
-          const ok = await openUpdate(info.downloadUrl);
-          if (!ok) {
-            Dialog.alert(
-              'No se pudo abrir el enlace',
-              'Escríbele a Diego para que te pase la versión actualizada.'
+          let cancelled = false;
+          let task = null;
+          let lastPct = -1;
+          const progressId = Dialog.alert(
+            'Descargando actualización',
+            'Preparando la descarga...',
+            [
+              {
+                text: 'Cancelar',
+                style: 'cancel',
+                onPress: () => {
+                  cancelled = true;
+                  if (task) task.cancel();
+                },
+              },
+            ],
+            { cancelable: false }
+          );
+          try {
+            const result = await downloadAndInstallUpdate(
+              info.downloadUrl,
+              (progress) => {
+                const pct = Math.round(progress * 100);
+                if (pct !== lastPct) {
+                  lastPct = pct;
+                  Dialog.update(progressId, { message: `Descargando... ${pct}%` });
+                }
+              },
+              (t) => { task = t; }
             );
+            Dialog.hide(progressId);
+            if (!result.ok && !cancelled) {
+              Dialog.alert(
+                'No se pudo actualizar',
+                'No se pudo descargar o abrir el instalador. Revisa tu conexión e inténtalo de nuevo, o escríbele a Diego para que te pase la versión actualizada.'
+              );
+            }
+          } catch (e) {
+            Dialog.hide(progressId);
+            if (!cancelled) {
+              Dialog.alert(
+                'No se pudo actualizar',
+                'No se pudo descargar la actualización. Revisa tu conexión e inténtalo de nuevo, o escríbele a Diego para que te pase la versión actualizada.'
+              );
+            }
           }
         },
       },

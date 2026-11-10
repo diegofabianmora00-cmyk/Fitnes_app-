@@ -7,15 +7,20 @@ import Coach from './Coach';
 
 let pending = [];
 let emit = null;
+let hideCurrent = null;
+let patchCurrent = null;
 
 function show(config) {
   const cfg = { id: Date.now() + Math.random(), ...config };
   if (emit) emit(cfg);
   else pending.push(cfg);
+  return cfg.id;
 }
 
 export const Dialog = {
   alert: (title, message, buttons, options) => show({ title, message, buttons, options }),
+  hide: (id) => { if (hideCurrent) hideCurrent(id); },
+  update: (id, patch) => { if (patchCurrent) patchCurrent(id, patch); },
 };
 
 const iconFor = (text, style) => {
@@ -198,12 +203,30 @@ export function DialogHost() {
       }
     };
     emit = handler;
+    hideCurrent = (id) => {
+      if (currentRef.current && currentRef.current.id === id) {
+        const next = queue.current.length ? queue.current.shift() : null;
+        currentRef.current = next;
+        setCurrent(next);
+        return;
+      }
+      queue.current = queue.current.filter((c) => c.id !== id);
+    };
+    patchCurrent = (id, patch) => {
+      if (currentRef.current && currentRef.current.id === id) {
+        const next = { ...currentRef.current, ...patch };
+        currentRef.current = next;
+        setCurrent(next);
+        return;
+      }
+      queue.current = queue.current.map((c) => (c.id === id ? { ...c, ...patch } : c));
+    };
     if (pending.length) {
       const rest = pending;
       pending = [];
       rest.forEach(handler);
     }
-    return () => { emit = null; };
+    return () => { emit = null; hideCurrent = null; patchCurrent = null; };
   }, []);
 
   const advance = () => {

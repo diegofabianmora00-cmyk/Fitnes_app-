@@ -46,7 +46,7 @@ no los crees ni los edites.
 - src/Settings.js: kg/lb, editar perfil, exportar, borrar datos.
 - src/coachMemory.js: cerebro de los mensajes de Atlas (lógica pura y plantillas).
 - src/version.js: versión instalada (desde app.json) y comparación de versiones (puro).
-- src/updates.js: consulta update.json remoto, enlace de descarga y versión ya avisada (AsyncStorage).
+- src/updates.js: consulta update.json remoto, descarga e instala el APK dentro de la app y guarda la versión ya avisada (AsyncStorage).
 - src/UpdatePrompt.js: diálogos de nueva versión, "Actualizar ahora" y "Continuar con mi versión actual".
 - update.json: manifiesto remoto con versión, enlace del APK y notas de la actualización.
 - jest.config.js: preset 'jest-expo' para pruebas.
@@ -134,6 +134,6 @@ workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName, 
 
 ## Estado
 - Hecho: app base, base de ejercicios (79), perfil, motor de recomendación, entrenamiento guiado, calorías, gráficas básicas, pruebas del motor y puntaje (54), rediseño completo de la pestaña Rutinas (+buscador, ejercicios personalizados en data.customExercises, vista de detalle de rutina hecha con descanso, RIR, botón "EDITAR" y reordenamiento de ejercicios con `↑`/`↓`), rediseño completo de la pestaña Progreso (con filtros e historial agrupado por mes), rediseño completo de la pestaña Inicio, puntaje de sesión v4, rediseño completo de la pestaña Ajustes, y Prompt 1 (sistema de tipos de carga: datos, funciones puras, migración a schemaVersion 5 y pruebas unitarias completas).
-- Hecho (último paso): Prompt 2 del sistema en tiempo real (recommendFor devuelve setPlans, rirTarget, readiness y deload; RULES/SOURCES nuevos de autoregulación, RIR, readiness, deload y dolor) y pruebas 96 en verde.
+- Hecho (último paso): sistema de actualizaciones con descarga e instalación dentro de la app (expo-file-system + expo-intent-launcher, permiso REQUEST_INSTALL_PACKAGES), aviso de nueva versión y botón "Continuar con mi versión actual"; versión 1.1.2, APK compilado en EAS, 96 pruebas y export de Android verificados. Prompt 2 (autoregulación, readiness, deload) también quedó integrado con sus 96 pruebas en verde.
 - Por confirmar: ninguno (tipografía Inter en H y Btn confirmada y cargada correctamente con expo-google-fonts).
 - Pendiente: ninguno (prototipo completo y pulido).

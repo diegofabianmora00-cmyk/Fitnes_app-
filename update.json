@@ -1,5 +1,5 @@
 {
-  "version": "1.1.1",
-  "downloadUrl": "https://expo.dev/artifacts/eas/9e0duOJRPNu-eBJz1ezc5c35kGkNVDMlLHu32ctI-y8.apk",
-  "notes": "Prueba del aviso de actualización."
+  "version": "1.1.2",
+  "downloadUrl": "https://expo.dev/artifacts/eas/J2wtBvxqSOp-8DCXaWAO1Tvn84oVYnSJzWWvJ2itB6o.apk",
+  "notes": "La actualización ahora se descarga e instala desde la propia app."
 }
