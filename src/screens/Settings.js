@@ -13,6 +13,9 @@ import CustomExerciseModal from '../CustomExerciseModal';
 import RuleInfo from '../RuleInfo';
 import { Dialog } from '../Dialog';
 import { GYM_DEFAULT } from '../load';
+import { APP_VERSION, isUpdateAvailable } from '../version';
+import { fetchLatestUpdate } from '../updates';
+import { promptUpdate } from '../UpdatePrompt';
 
 export default function Settings() {
   const { data, update } = useStore();
@@ -24,6 +27,7 @@ export default function Settings() {
   const [showRules, setShowRules] = useState(false);
   const [showEditWorkout, setShowEditWorkout] = useState(false);
   const [editingWorkout, setEditingWorkout] = useState(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   const p = data.profile || {};
   const customExercises = data.customExercises || [];
@@ -61,6 +65,22 @@ export default function Settings() {
     } catch (e) {
       Dialog.alert('Error de formato', 'El texto ingresado no es un JSON válido.');
     }
+  };
+
+  const checkUpdates = async () => {
+    if (checkingUpdate) return;
+    setCheckingUpdate(true);
+    const info = await fetchLatestUpdate();
+    setCheckingUpdate(false);
+    if (!info) {
+      Dialog.alert('Sin conexión', 'No se pudo comprobar si hay actualizaciones. Revisa tu conexión a internet e inténtalo de nuevo.');
+      return;
+    }
+    if (!isUpdateAvailable(APP_VERSION, info.version)) {
+      Dialog.alert('Estás al día', `Tienes la versión más reciente (${APP_VERSION}).`);
+      return;
+    }
+    promptUpdate(info);
   };
 
   const simulateCorrupt = async () => {
@@ -402,16 +422,25 @@ export default function Settings() {
           <T style={{ fontSize: 12, fontWeight: '600', color: C.mute, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 6 }}>
             Información y Ciencia
           </T>
-          <T style={{ fontSize: 16, fontWeight: '700' }}>Fitness Coach v4.0</T>
+          <T style={{ fontSize: 16, fontWeight: '700' }}>Fitness Coach v{APP_VERSION}</T>
           <T mute style={{ fontSize: 13, marginTop: 4, marginBottom: 12 }}>
             Expo SDK 58 · Motor basado en evidencia científica y RIR.
           </T>
-          <Btn
-            kind="ghost"
-            icon="flask-outline"
-            label="Ver reglas y fuentes científicas"
-            onPress={() => setShowRules(true)}
-          />
+          <View style={{ gap: 10 }}>
+            <Btn
+              kind="ghost"
+              icon="refresh"
+              label={checkingUpdate ? 'Buscando actualizaciones...' : 'Buscar actualizaciones'}
+              onPress={checkUpdates}
+              disabled={checkingUpdate}
+            />
+            <Btn
+              kind="ghost"
+              icon="flask-outline"
+              label="Ver reglas y fuentes científicas"
+              onPress={() => setShowRules(true)}
+            />
+          </View>
         </Card>
       </FadeIn>
 

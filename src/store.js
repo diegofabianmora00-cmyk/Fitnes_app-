@@ -4,6 +4,7 @@ export const KEYS = {
   corrupt: 'fitnesscoach:v1:corrupto',
   backup: 'fitnesscoach:v1:backup',
   draft: 'fitnesscoach:v1:draft',
+  update: 'fitnesscoach:v1:update',
   seedBackup: 'fitnesscoach:v1:pruebas-copia',
 };
 const KEY = KEYS.data;

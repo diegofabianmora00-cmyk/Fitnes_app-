@@ -16,6 +16,9 @@ import Settings from './src/screens/Settings';
 import Workout from './src/screens/Workout';
 import ProfileSetup from './src/screens/ProfileSetup';
 import { Dialog, DialogHost } from './src/Dialog';
+import { APP_VERSION, isUpdateAvailable } from './src/version';
+import { fetchLatestUpdate, getSeenUpdate } from './src/updates';
+import { promptUpdate } from './src/UpdatePrompt';
 
 const DRAFT_KEY = KEYS.draft;
 
@@ -164,6 +167,20 @@ function Shell() {
     }).catch(() => {});
     return () => { alive = false; };
   }, [ready]);
+
+  useEffect(() => {
+    if (!ready || !fontsLoaded || showIntro || !data.profile?.completed) return;
+    let alive = true;
+    const timer = setTimeout(async () => {
+      const info = await fetchLatestUpdate();
+      if (!alive || !info) return;
+      if (!isUpdateAvailable(APP_VERSION, info.version)) return;
+      const seen = await getSeenUpdate();
+      if (!alive || seen === info.version) return;
+      promptUpdate(info);
+    }, 2500);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [ready, fontsLoaded, showIntro, data.profile?.completed]);
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {

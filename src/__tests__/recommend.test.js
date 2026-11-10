@@ -463,3 +463,83 @@ describe('nuevas reglas del motor de recomendaciones', () => {
     expect(res.primaryRule.id).toBe('energyCheck');
   });
 });
+
+describe('autoregulacion en recommendFor', () => {
+  it('sin historial devuelve setPlans sin inventar peso y con RIR objetivo', () => {
+    const res = recommendFor(data([]), makeEx({ sets: 4 }));
+    expect(res.weightKg).toBeNull();
+    expect(res.rirTarget).toEqual({ lo: 1, hi: 3, target: 2 });
+    expect(res.setPlans).toHaveLength(4);
+    expect(res.setPlans.every((p) => p.weightKg === null)).toBe(true);
+    expect(res.setPlans[0].reps).toBe(8);
+    expect(res.setPlans[0].rir).toBe(2);
+    expect(res.setPlans[3].rir).toBe(3);
+    expect(res.readiness).toBe('normal');
+    expect(res.deload).toBeNull();
+  });
+
+  it('setPlans usa el peso recomendado y el descanso de la sesion', () => {
+    const res = recommendFor(
+      data([
+        makeWorkout(NOW, [makeSet(60, 10), makeSet(60, 10), makeSet(60, 10)]),
+        makeWorkout(NOW - 3 * DAY, [makeSet(60, 8), makeSet(60, 8), makeSet(60, 8)]),
+      ]),
+      makeEx(),
+    );
+    expect(res.action).toBe('up');
+    expect(res.setPlans).toHaveLength(3);
+    expect(res.setPlans.every((p) => p.weightKg === 62.5)).toBe(true);
+    expect(res.setPlans.every((p) => p.reps === 8)).toBe(true);
+    expect(res.setPlans.every((p) => p.restSec === res.restSec)).toBe(true);
+  });
+
+  it('peso corporal mantiene setPlans en 0', () => {
+    const res = recommendFor(
+      data([makeWorkout(NOW, [makeSet(0, 12, 2)], 'dominadas', 'Dominadas', 0)]),
+      makeEx({ id: 'dominadas', name: 'Dominadas', group: 'Espalda', equipment: 'Peso corporal', reps: 12 }),
+    );
+    expect(res.setPlans.every((p) => p.weightKg === 0)).toBe(true);
+  });
+
+  it('readiness usa el check-in y el historial', () => {
+    const good = data([makeWorkout(NOW, [makeSet(60, 8, 2)])]);
+    expect(recommendFor(good, makeEx()).readiness).toBe('normal');
+    expect(recommendFor({ ...good, checkin: { level: 'cansado' } }, makeEx()).readiness).toBe('low');
+    expect(recommendFor({ ...good, checkin: { level: 'bien' } }, makeEx()).readiness).toBe('high');
+    expect(recommendFor({ ...good, checkin: { level: 'normal' } }, makeEx()).readiness).toBe('normal');
+
+    const drop = data([
+      makeWorkout(NOW, [makeSet(80, 8, 2)]),
+      makeWorkout(NOW - 3 * DAY, [makeSet(100, 8, 2)]),
+    ]);
+    expect(recommendFor(drop, makeEx()).readiness).toBe('low');
+  });
+
+  it('detecta deload tras dos sesiones seguidas con caida clara de e1RM', () => {
+    const res = recommendFor(
+      data([
+        makeWorkout(NOW, [makeSet(88, 8, 2)]),
+        makeWorkout(NOW - 3 * DAY, [makeSet(94, 8, 2)]),
+        makeWorkout(NOW - 6 * DAY, [makeSet(100, 8, 2)]),
+      ]),
+      makeEx(),
+    );
+    expect(res.deload).not.toBeNull();
+    expect(res.deload.active).toBe(true);
+    expect(res.deload.sessions).toBe(2);
+    expect(res.deload.dropPct).toBeGreaterThanOrEqual(10);
+    expect(res.deload.text).toContain('descarga');
+  });
+
+  it('no marca deload con e1RM estable', () => {
+    const res = recommendFor(
+      data([
+        makeWorkout(NOW, [makeSet(100, 8, 2)]),
+        makeWorkout(NOW - 3 * DAY, [makeSet(100, 8, 2)]),
+        makeWorkout(NOW - 6 * DAY, [makeSet(100, 8, 2)]),
+      ]),
+      makeEx(),
+    );
+    expect(res.deload).toBeNull();
+  });
+});

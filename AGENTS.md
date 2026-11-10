@@ -21,12 +21,13 @@ no los crees ni los edites.
 - src/store.js: StoreProvider y useStore() → { data, update, ready }. Helpers: uid, KG,
   toU(kg,u), fromU(v,u), lastSets(data,exId) y migrate() (normaliza datos viejos, la
   rutina inicial e1/e2/e3 y recalcula puntajes viejos a v3).
-- src/recommend.js: motor puro (sin React). recommendFor, RULES/SOURCES, repRangeFor,
-  restFor, frequencyAdvice, restFeedback, personalRecords, newRecords, sessionReview,
-  exerciseReview, rescoreWorkouts, routineScores, weekSummary y coachMessage.
+- src/recommend.js: motor puro (sin React). recommendFor (con setPlans, rirTarget, readiness y deload),
+  RULES/SOURCES, repRangeFor, restFor, frequencyAdvice, restFeedback, personalRecords, newRecords,
+  sessionReview, exerciseReview, rescoreWorkouts, routineScores, weekSummary y coachMessage.
 - src/Coach.js: Atlas animado. COACH (apariencia) y Coach({ mood, size }):
   mood neutral | happy | alert; size 'sm' | 'lg'.
 - src/load.js: sistema de tipos de carga y lógica pura de cálculo (totalFromInputs, plateBreakdown, nearestLoadable, volumeFactor, GYM_DEFAULT).
+- src/autoreg.js: motor puro de autoregulación en vivo (e1rmKg, repsAtLoadKg, targetLoadKg, fatigueDrop, readiness, rirTargetFor, nextSetPlan, nextSessionPlan) y redondeo de carga por equipo.
 - src/exercises.js: COMPENDIUM, METS, exercises (79 con loadType), GROUPS, exerciseById,
   filterExercises, registerCustomExercises, kcalPerHour.
 - src/ExercisePicker.js: selector con buscador (props: visible, onClose, onSelect, selectedId).
@@ -44,13 +45,20 @@ no los crees ni los edites.
 - src/screens/progress/StreakCard.js, PeriodPicker.js, ProgressChart.js, StatGrid.js, CoachCard.js, PrCard.js, MuscleCard.js, RoutineScoresCard.js, HistoryList.js, SessionDetail.js, EmptyProgress.js: componentes modulares de la interfaz de Progreso.
 - src/Settings.js: kg/lb, editar perfil, exportar, borrar datos.
 - src/coachMemory.js: cerebro de los mensajes de Atlas (lógica pura y plantillas).
+- src/version.js: versión instalada (desde app.json) y comparación de versiones (puro).
+- src/updates.js: consulta update.json remoto, enlace de descarga y versión ya avisada (AsyncStorage).
+- src/UpdatePrompt.js: diálogos de nueva versión, "Actualizar ahora" y "Continuar con mi versión actual".
+- update.json: manifiesto remoto con versión, enlace del APK y notas de la actualización.
 - jest.config.js: preset 'jest-expo' para pruebas.
 - src/__tests__/load.test.js: pruebas unitarias de tipos de carga, cálculos, desglose de discos, pesos armables, factor de volumen y migración (jest).
+- src/__tests__/autoreg.test.js: pruebas unitarias del motor de autoregulación en vivo (jest).
 - src/__tests__/recommend.test.js: pruebas unitarias del motor puro (jest).
 - src/__tests__/scoring.test.js: pruebas del puntaje de sesión v3, recalculo y puntaje por rutina (jest).
 - src/__tests__/coachMemory.test.js: pruebas unitarias del cerebro de mensajes de Atlas (jest).
+- src/__tests__/version.test.js: pruebas de comparación de versiones (jest).
 - docs/decisiones.md: reglas del motor (progresión, estancamiento, descanso, PR, puntaje, e1RM y racha).
 - docs/sistema_recomendaciones.txt: explicación simple y exacta del sistema de recomendaciones.
+- docs/actualizaciones.md: cómo publicar una versión nueva y actualizar update.json.
 
 ## Datos (pesos siempre en kg)
 Claves de AsyncStorage:
@@ -61,6 +69,8 @@ Claves de AsyncStorage:
 - fitnesscoach:v1:backup: respaldo legado; solo se usa como segunda opción al restaurar.
 - fitnesscoach:v1:draft: borrador del entreno en curso (rutina, inicio, series y posición);
   se borra al terminar o descartar.
+- fitnesscoach:v1:update: última versión avisada por el sistema de actualizaciones; evita
+  repetir el aviso automático de la misma versión.
 data = { schemaVersion: 5, unit, gym: { bars, defaultBarId, platesKg, platesLb, dumbbellStep, stackStep, carriageKg, countCarriage }, checkin: { date, level },
 profile: { goal, environment, ambition, level, daysPerWeek, weightKg, heightCm, age, sex,
   activityLevel, jointFocus, restStyle, tone, completed, updatedAt },
@@ -86,8 +96,12 @@ workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName, 
   usa búsquedas y rangos de líneas; no los leas completos.
 - Busca cada tarea por su descripción: los números de línea pueden haber cambiado.
   Si algo ya está resuelto, dilo y no lo toques.
-- Cambios mínimos; no reescribas archivos enteros sin motivo. No cambies nada que la
-  tarea no pida. Si tomas una decisión que no estaba indicada, dila al final.
+- Prioriza que las cosas funcionen bien por encima de conservar lo existente. Puedes
+  cambiar la interfaz como haga falta, buscar otras soluciones o caminos, quitar cosas
+  innecesarias y rediseñar por completo lo que convenga si eso mejora el resultado que
+  se pide. No te limites a reutilizar lo que ya hay.
+- No cambies por cambiar: mantén lo que funciona y no toques lo que la tarea no pida.
+  Si tomas una decisión que no estaba indicada, dila al final.
 - No leas package-lock.json, node_modules ni dist.
 - Paquetes nuevos: `npx expo install <paquete>` (nunca `npm install <paquete>`). Usa solo
   librerías incluidas en Expo Go (como react-native-svg); evita las demás con código nativo.
@@ -120,6 +134,6 @@ workouts: [{ id, date, startedAt, endedAt, durationSec, routineId, routineName, 
 
 ## Estado
 - Hecho: app base, base de ejercicios (79), perfil, motor de recomendación, entrenamiento guiado, calorías, gráficas básicas, pruebas del motor y puntaje (54), rediseño completo de la pestaña Rutinas (+buscador, ejercicios personalizados en data.customExercises, vista de detalle de rutina hecha con descanso, RIR, botón "EDITAR" y reordenamiento de ejercicios con `↑`/`↓`), rediseño completo de la pestaña Progreso (con filtros e historial agrupado por mes), rediseño completo de la pestaña Inicio, puntaje de sesión v4, rediseño completo de la pestaña Ajustes, y Prompt 1 (sistema de tipos de carga: datos, funciones puras, migración a schemaVersion 5 y pruebas unitarias completas).
-- Hecho (último paso): reemplazados todos los `Alert.alert` nativos por diálogos propios (src/Dialog.js) con estética de la app, Atlas animado y botones con iconos; migradas las pruebas (60) y verificado el export de Android.
+- Hecho (último paso): Prompt 2 del sistema en tiempo real (recommendFor devuelve setPlans, rirTarget, readiness y deload; RULES/SOURCES nuevos de autoregulación, RIR, readiness, deload y dolor) y pruebas 96 en verde.
 - Por confirmar: ninguno (tipografía Inter en H y Btn confirmada y cargada correctamente con expo-google-fonts).
 - Pendiente: ninguno (prototipo completo y pulido).

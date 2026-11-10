@@ -1,5 +1,6 @@
 import { exerciseById } from './exercises';
 import { calculateFacts, getCoachMessage } from './coachMemory';
+import { e1rmKg as autoregE1rmKg, readiness as autoregReadiness, rirTargetFor as autoregRirTargetFor } from './autoreg';
 
 const KG = 2.20462;
 const LOAD_STEP = { kg: 2.5, lb: 5 };
@@ -57,6 +58,21 @@ export const SOURCES = {
   refalo2023:
     'Refalo MC, Helms ER, Trexler ET, Hamilton DL, Fyfe JJ. Influence of resistance training proximity-to-failure ' +
     'on skeletal muscle hypertrophy: a systematic review with meta-analysis. Sports Med. 2023;53(3):649-665.',
+  helms2018:
+    'Helms ER, Cross MR, Brown SR, Storey A, Cronin J, Zourdos MC. Rating of perceived exertion as a method of ' +
+    'volume autoregulation within a periodized program. J Strength Cond Res. 2018;32(6):1627-1636. ' +
+    'doi:10.1519/JSC.0000000000002032.',
+  ormsbee2019:
+    'Ormsbee MJ, Carzoli JP, Klemp A, Allman BR, Zourdos MC, Kim JS, Panton LB. Efficacy of the repetitions in ' +
+    'reserve-based rating of perceived exertion for the bench press in experienced and novice benchers. ' +
+    'J Strength Cond Res. 2019;33(2):337-345. doi:10.1519/JSC.0000000000001901.',
+  greig2020:
+    'Greig L, Stephens Hemingway BH, Aspe RR, Cooper K, Comfort P, Swinton PA. Autoregulation in resistance ' +
+    'training: addressing the inconsistencies. Sports Med. 2020;50(11):1873-1887. doi:10.1007/s40279-020-01330-8.',
+  mann2010:
+    'Mann JB, Thyfault JP, Ivey PA, Sayers SP. The effect of autoregulatory progressive resistance exercise vs. ' +
+    'linear periodization on strength improvement in college athletes. J Strength Cond Res. 2010;24(7):1718-1723. ' +
+    'doi:10.1519/JSC.0b013e3181def4a6.',
   app: 'Criterio de Fitness Coach. No es una recomendación clínica.',
 };
 
@@ -216,6 +232,53 @@ export const RULES = {
       'hacer una más; 2, dos más. Zourdos 2016 validó la escala RPE/RIR.',
     source: SOURCES.zourdos2016,
     kind: 'science',
+  },
+  autoreg: {
+    id: 'autoreg',
+    title: 'Autoregulación en vivo',
+    detail:
+      'Después de cada serie, Atlas compara reps, RIR, descanso real y e1RM con el objetivo. Si la serie sale ' +
+      'claramente del rango (al menos 1 repetición o 1 punto de RIR), ajusta el peso un paso; si no, ajusta ' +
+      'repeticiones y descanso. Criterio de la app basado en autoregulación por RIR.',
+    source: `${SOURCES.greig2020} ${SOURCES.helms2018} ${SOURCES.ormsbee2019}`,
+    kind: 'app',
+  },
+  rirTarget: {
+    id: 'rirTarget',
+    title: 'RIR objetivo de la serie',
+    detail:
+      'La app fija un RIR objetivo por serie (1-3 según objetivo y fatiga) y lo sube si la serie se acerca al ' +
+      'fallo. RIR 0 se trata como fallo. Criterio de la app basado en la escala RIR validada.',
+    source: `${SOURCES.zourdos2016} ${SOURCES.helms2018} ${SOURCES.ormsbee2019}`,
+    kind: 'science',
+  },
+  readiness: {
+    id: 'readiness',
+    title: 'Readiness diaria',
+    detail:
+      'El check-in (Bien, Normal, Cansado) y el e1RM reciente ajustan el plan del día. Si la primera serie rinde ' +
+      'menos del 90% de tu mejor reciente, es día flojo: mantiene el peso y sube el RIR objetivo; si rinde más ' +
+      'del 105% con RIR alto, sube un paso. Criterio de la app basado en autoregulación.',
+    source: `${SOURCES.greig2020} ${SOURCES.app}`,
+    kind: 'app',
+  },
+  deload: {
+    id: 'deload',
+    title: 'Descarga por caída de rendimiento',
+    detail:
+      'Si dos sesiones seguidas muestran una caída clara (más del 5%) del e1RM, la app avisa y sugiere bajar ' +
+      'volumen o peso antes de seguir. Criterio de la app basado en autoregulación y progresión.',
+    source: `${SOURCES.mann2010} ${SOURCES.greig2020} ${SOURCES.app}`,
+    kind: 'app',
+  },
+  pain: {
+    id: 'pain',
+    title: 'Dolor durante el ejercicio',
+    detail:
+      'Si marcas Dolor, la app detiene el ejercicio, protege la sesión y no cuenta PR. El dolor no se entrena: ' +
+      'si persiste o limita el movimiento, consulta a un profesional. Criterio de la app.',
+    source: SOURCES.app,
+    kind: 'app',
   },
   restFeedback: {
     id: 'restFeedback',
@@ -487,6 +550,53 @@ export function restFeedback(data = {}, ex = {}) {
   };
 }
 
+function bestE1rmOfSets(sets = []) {
+  let best = 0;
+  for (const s of sets) {
+    if (!s || s.unconfirmed) continue;
+    const e = autoregE1rmKg(s.w, s.r, s.rir);
+    if (e && e > best) best = e;
+  }
+  return best;
+}
+
+function initialReadiness(data = {}, history = []) {
+  const checkin = data.checkin && data.checkin.level;
+  const recent = history
+    .slice(0, 3)
+    .map((s) => bestE1rmOfSets(s.sets))
+    .filter((v) => v > 0);
+  let fromHistory = 'normal';
+  if (recent.length >= 2) {
+    const last = recent[0];
+    const previous = Math.max(...recent.slice(1));
+    if (previous > 0) {
+      if (last < previous * 0.9) fromHistory = 'low';
+      else if (last > previous * 1.05) fromHistory = 'high';
+    }
+  }
+  if (checkin === 'cansado') return 'low';
+  if (checkin === 'bien') return fromHistory === 'low' ? 'normal' : 'high';
+  if (checkin === 'normal') return 'normal';
+  return fromHistory;
+}
+
+function detectDeload(history = []) {
+  const bests = history.slice(0, 3).map((s) => bestE1rmOfSets(s.sets));
+  if (bests.length < 3 || bests.some((v) => !(v > 0))) return null;
+  if (bests[0] < bests[1] * 0.95 && bests[1] < bests[2] * 0.95) {
+    const dropPct = Math.round((1 - bests[0] / bests[2]) * 100);
+    return {
+      active: true,
+      sessions: 2,
+      dropPct,
+      text: `Dos sesiones seguidas con caída clara de e1RM (${dropPct}% menos). Considera una descarga: baja el peso o el volumen esta semana.`,
+      rule: RULES.deload,
+    };
+  }
+  return null;
+}
+
 export function recommendFor(data = {}, ex = {}) {
   const profile = { ...(data.profile || {}) };
   const db = exerciseById(ex.id);
@@ -540,6 +650,24 @@ export function recommendFor(data = {}, ex = {}) {
         out.text = `${out.text} [Salud articular: ${jfObj.label} — ${jfObj.desc}]`;
       }
     }
+    const totalSets = Math.max(1, Number(ex.sets) || 3);
+    const planWeight = out.weightKg;
+    const planReps = Number(out.targetReps) || baseTarget;
+    const planRest = Number(out.restSec) || restSec;
+    out.rirTarget = autoregRirTargetFor(profile, 0, totalSets, type);
+    out.setPlans = Array.from({ length: totalSets }, (_, i) => {
+      const target = autoregRirTargetFor(profile, i, totalSets, type);
+      return {
+        setNumber: i + 1,
+        weightKg: planWeight,
+        reps: planReps,
+        rir: target.target,
+        rirRange: [target.lo, target.hi],
+        restSec: planRest,
+      };
+    });
+    out.readiness = out.readiness || initialReadiness(data, history);
+    out.deload = detectDeload(history);
     return out;
   };
 
