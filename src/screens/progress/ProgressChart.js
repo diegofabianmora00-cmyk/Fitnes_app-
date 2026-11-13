@@ -42,8 +42,10 @@ export default function ProgressChart({ data, rango, stats, selectedExId, setSel
     }).start();
   }, [metric, selectedExId, series.length, showEmpty]);
 
-  const exName = selectedExId ? (exerciseById(selectedExId)?.name || 'Ejercicio') : 'Todos los ejercicios';
-  const pctDiff = stats.diffScore >= 0 ? `+${stats.diffScore}%` : `${stats.diffScore}%`;
+  const exName = selectedExId ? (exerciseById(selectedExId)?.name || (data.customExercises || []).find((e) => e.id === selectedExId)?.name || 'Ejercicio') : 'Todos los ejercicios';
+  const pctDiff = !stats.prevSessions
+    ? '—'
+    : stats.diffScore >= 0 ? `+${stats.diffScore} pts` : `${stats.diffScore} pts`;
 
   // SVG dimensions
   const width = 346;
@@ -245,8 +247,7 @@ export default function ProgressChart({ data, rango, stats, selectedExId, setSel
         visible={pickerOpen}
         onClose={() => setPickerOpen(false)}
         selectedId={selectedExId}
-        allowAll={true}
-        onSelectAll={() => setSelectedExId(null)}
+        allowAll
         onSelect={(item) => setSelectedExId(item ? item.id : null)}
       />
     </Card>

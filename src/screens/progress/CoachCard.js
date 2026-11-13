@@ -15,14 +15,16 @@ export default function CoachCard({ data, onSelectExercise }) {
     const uniqueExIds = [...new Set(workouts.flatMap((w) => (w.exercises || []).map((e) => e.exId)))];
     for (const exId of uniqueExIds) {
       const db = exerciseById(exId);
-      const name = db ? db.name : 'Ejercicio';
       const last = workouts.find((w) => (w.exercises || []).some((e) => e.exId === exId));
       const lastEx = last && last.exercises.find((e) => e.exId === exId);
+      const name = (lastEx && lastEx.name) || (db && db.name) || 'Ejercicio';
       const rec = recommendFor(data, {
         id: exId,
         name,
         group: db ? db.group : '',
-        type: db ? db.type : 'compuesto',
+        type: (lastEx && lastEx.type) || (db ? db.type : 'compuesto'),
+        loadType: (lastEx && lastEx.loadType) || (db && db.loadType),
+        equipment: (lastEx && lastEx.equipment) || (db && db.equipment),
         reps: Number(lastEx && lastEx.targetReps) || 8,
       });
       if (rec.action === 'stall') {

@@ -1,6 +1,11 @@
 import { exerciseById } from './exercises';
 import { calculateFacts, getCoachMessage } from './coachMemory';
-import { e1rmKg as autoregE1rmKg, readiness as autoregReadiness, rirTargetFor as autoregRirTargetFor } from './autoreg';
+import { e1rmKg as autoregE1rmKg, readiness as autoregReadiness, readinessFromSeries, rirTargetFor as autoregRirTargetFor, bodyweightPerformance } from './autoreg';
+import { analyzeRir } from './rir';
+import { weeklyMuscleVolume, classifyVolumeSets } from './volume';
+import { READINESS, REST, STALL, DELOAD, FIRST_TIME, CONFIDENCE, HYSTERESIS, FATIGUE, PAUSE, APP_HEURISTIC } from './config';
+
+export { weeklyMuscleVolume, classifyVolumeSets };
 
 const KG = 2.20462;
 const LOAD_STEP = { kg: 2.5, lb: 5 };
@@ -351,7 +356,7 @@ export const RULES = {
   },
 };
 
-export const CONFIDENCE_NEEDED = 4;
+export const CONFIDENCE_NEEDED = CONFIDENCE.needed;
 
 export function confidence(historial = [], ejercicioId) {
   let workouts = [];
@@ -376,7 +381,7 @@ export function confidence(historial = [], ejercicioId) {
 
   const necesarias = CONFIDENCE_NEEDED;
   let nivel = 'baja';
-  if (sessionsCount >= 4) {
+  if (sessionsCount >= CONFIDENCE.needed) {
     nivel = 'alta';
   } else if (sessionsCount >= 2) {
     nivel = 'media';
@@ -475,29 +480,44 @@ function sessionHistory(data, exId) {
 }
 
 function detectStall(history, top, fallbackTarget) {
-  const last3 = history.slice(0, 3);
-  if (last3.length === 3 && last3.every((s) => sameKg(topWeight(s), top))) {
+  const last3 = history.slice(0, STALL.recentSessions);
+  let candidate = null;
+  if (last3.length === STALL.recentSessions && last3.every((s) => sameKg(topWeight(s), top))) {
     const newest = sessionInfo(last3[0], fallbackTarget);
     const oldest = sessionInfo(last3[2], fallbackTarget);
     if (newest.best <= oldest.best && newest.total <= oldest.total && !(newest.met && newest.margin)) {
       const days = Math.max(1, Math.round(((last3[0].date || 0) - (last3[2].date || 0)) / 864e5));
-      return { stall: true, days, reason: '3 sesiones' };
+      candidate = { stall: true, days, reason: '3 sesiones', reasonCode: 'stall_same_weight_reps' };
     }
   }
-  let count = 0;
-  for (const s of history) {
-    if (sameKg(topWeight(s), top)) count++;
-    else break;
+  if (!candidate) {
+    let count = 0;
+    for (const s of history) {
+      if (sameKg(topWeight(s), top)) count++;
+      else break;
+    }
+    if (count >= 2) {
+      const days = Math.round(((history[0].date || 0) - (history[count - 1].date || 0)) / 864e5);
+      const anyGood = history.slice(0, count).some((s) => {
+        const i2 = sessionInfo(s, fallbackTarget);
+        return i2.met && i2.margin;
+      });
+      if (days >= STALL.minDays && !anyGood) candidate = { stall: true, days, reason: '14 días', reasonCode: 'stall_days_no_progress' };
+    }
   }
-  if (count >= 2) {
-    const days = Math.round(((history[0].date || 0) - (history[count - 1].date || 0)) / 864e5);
-    const anyGood = history.slice(0, count).some((s) => {
-      const i = sessionInfo(s, fallbackTarget);
-      return i.met && i.margin;
-    });
-    if (days >= 14 && !anyGood) return { stall: true, days, reason: '14 días' };
+  if (!candidate) return { stall: false, days: 0, reason: '', reasonCode: 'no_stall' };
+
+  const trend = performanceTrend(history, STALL.historyWindow);
+  if (trend.points >= 3 && trend.improving && trend.slopeRel > STALL.e1rmSlopeFlat) {
+    return { stall: false, days: candidate.days, reason: '', reasonCode: 'stall_rejected_by_trend', why: 'Aunque el peso o las repeticiones se ven iguales, tu rendimiento tiende a mejorar.' };
   }
-  return { stall: false, days: 0, reason: '' };
+  return {
+    ...candidate,
+    trend,
+    why: candidate.reasonCode === 'stall_same_weight_reps'
+      ? 'Llevas varias sesiones con el mismo peso sin mejorar repeticiones ni rendimiento.'
+      : 'Ha pasado tiempo con el mismo peso sin una sesión cumplida con margen.',
+  };
 }
 
 function restFeedbackFromSets(sets, targetSec) {
@@ -508,10 +528,14 @@ function restFeedbackFromSets(sets, targetSec) {
   if (!rests.length) return null;
   const actual = Math.round(rests.reduce((a, b) => a + b, 0) / rests.length);
   const dev = actual - targetSec;
-  const threshold = Math.max(20, Math.round(targetSec * 0.2));
+  const threshold = Math.max(REST.feedbackMinToleranceSec, Math.round(targetSec * REST.feedbackToleranceRatio));
   const kind = dev < -threshold ? 'short' : dev > threshold ? 'long' : 'ok';
-  return { actual, target: targetSec, dev, threshold, kind };
+  let reasonCode = 'rest_ok';
+  if (kind === 'short') reasonCode = 'rest_short';
+  if (kind === 'long') reasonCode = 'rest_long';
+  return { actual, target: targetSec, dev, threshold, kind, reasonCode };
 }
+
 
 function restInsightText(kind, actual, target, missed, name) {
   const diff = Math.abs(Math.round(actual - target));
@@ -560,20 +584,45 @@ function bestE1rmOfSets(sets = []) {
   return best;
 }
 
+function bestPerformanceOfSets(sets = []) {
+  let bestE = 0;
+  let bestBw = 0;
+  for (const s of sets) {
+    if (!s || s.unconfirmed) continue;
+    const e = autoregE1rmKg(s.w, s.r, s.rir);
+    if (e && e > bestE) bestE = e;
+    const bw = bodyweightPerformance(s.r, s.rir);
+    if (bw && bw > bestBw) bestBw = bw;
+  }
+  return { e1rm: bestE, bw: bestBw, value: bestE > 0 ? bestE : bestBw };
+}
+
+function performanceTrend(history = [], limit = STALL.historyWindow) {
+  const vals = history.slice(0, limit).map((s) => bestPerformanceOfSets(s.sets).value).filter((v) => v > 0);
+  if (vals.length < 3) return { slopeRel: 0, points: vals.length, improving: true };
+  const seq = [...vals].reverse();
+  const n = seq.length;
+  const meanX = (n - 1) / 2;
+  const meanY = seq.reduce((a, b) => a + b, 0) / n;
+  let num = 0; let den = 0;
+  for (let i = 0; i < n; i++) { num += (i - meanX) * (seq[i] - meanY); den += (i - meanX) * (i - meanX); }
+  const slope = den ? num / den : 0;
+  const slopeRel = meanY ? slope / meanY : 0;
+  return { slopeRel, points: n, improving: slopeRel > STALL.e1rmSlopeFlat, mean: meanY };
+}
+
 function initialReadiness(data = {}, history = []) {
   const checkin = data.checkin && data.checkin.level;
-  const recent = history
-    .slice(0, 3)
-    .map((s) => bestE1rmOfSets(s.sets))
-    .filter((v) => v > 0);
+  const perfs = history.slice(0, READINESS.window).map((s) => bestPerformanceOfSets(s.sets).value).filter((v) => v > 0);
   let fromHistory = 'normal';
-  if (recent.length >= 2) {
-    const last = recent[0];
-    const previous = Math.max(...recent.slice(1));
-    if (previous > 0) {
-      if (last < previous * 0.9) fromHistory = 'low';
-      else if (last > previous * 1.05) fromHistory = 'high';
-    }
+  if (perfs.length >= 2) {
+    const ref = Math.max(...perfs);
+    fromHistory = readinessFromSeries(perfs, ref);
+  }
+  const trend = performanceTrend(history, 3);
+  if (trend.points >= 3 && !trend.improving && trend.slopeRel < -0.01) {
+    if (fromHistory === 'high') fromHistory = 'normal';
+    else if (fromHistory === 'normal') fromHistory = 'low';
   }
   if (checkin === 'cansado') return 'low';
   if (checkin === 'bien') return fromHistory === 'low' ? 'normal' : 'high';
@@ -581,21 +630,61 @@ function initialReadiness(data = {}, history = []) {
   return fromHistory;
 }
 
-function detectDeload(history = []) {
-  const bests = history.slice(0, 3).map((s) => bestE1rmOfSets(s.sets));
-  if (bests.length < 3 || bests.some((v) => !(v > 0))) return null;
-  if (bests[0] < bests[1] * 0.95 && bests[1] < bests[2] * 0.95) {
-    const dropPct = Math.round((1 - bests[0] / bests[2]) * 100);
-    return {
-      active: true,
-      sessions: 2,
-      dropPct,
-      text: `Dos sesiones seguidas con caída clara de e1RM (${dropPct}% menos). Considera una descarga: baja el peso o el volumen esta semana.`,
-      rule: RULES.deload,
-    };
+function detectDeload(history = [], data = {}, exId) {
+  const bests = history.slice(0, 4).map((s) => bestPerformanceOfSets(s.sets).value).filter((v) => v > 0);
+  let consecutiveDrops = 0;
+  for (let i = 0; i < Math.min(bests.length - 1, 3); i++) {
+    if (bests[i] < bests[i + 1] * (1 - DELOAD.dropRatioSession)) consecutiveDrops++;
+    else break;
   }
-  return null;
+  const perfDrop = consecutiveDrops >= DELOAD.consecutiveDrops;
+
+  const recentPerfs = history.slice(0, 4).map((s) => bestPerformanceOfSets(s.sets).value).filter((v) => v > 0);
+  const refPerf = recentPerfs.length ? Math.max(...recentPerfs) : 0;
+  const lowReadinessCount = refPerf > 0 ? recentPerfs.filter((v) => v < refPerf * READINESS.lowRatio).length : 0;
+  const repeatedLowReadiness = lowReadinessCount >= DELOAD.lowReadinessSessions;
+
+  let stalledExercises = 0;
+  if (data && Array.isArray(data.workouts)) {
+    const exIds = new Set();
+    for (const w of (data.workouts || []).slice(0, 8)) for (const e of (w.exercises || [])) if (e.exId) exIds.add(e.exId);
+    for (const id of exIds) {
+      if (id === exId) continue;
+      const h = sessionHistory(data, id);
+      if (h.length >= 2) {
+        const t = topWeight(h[0]);
+        const st = detectStall(h, t, (h[0].target || 8));
+        if (st && st.stall) stalledExercises++;
+      }
+      if (stalledExercises >= DELOAD.multiExerciseStall) break;
+    }
+  }
+  const multiStall = stalledExercises >= DELOAD.multiExerciseStall;
+
+  const reasons = [];
+  if (perfDrop) reasons.push('caída de rendimiento en sesiones seguidas');
+  if (repeatedLowReadiness) reasons.push('rendimiento bajo repetido');
+  if (multiStall) reasons.push('estancamiento en varios ejercicios');
+
+  const active = perfDrop || (reasons.length >= 2);
+  if (!active) return null;
+  const dropPct = bests.length >= 2 ? Math.round((1 - bests[0] / bests[bests.length - 1]) * 100) : 0;
+  const plan = `Semana de descarga (criterio de la app): baja el volumen un ${Math.round(DELOAD.volumeReduction * 100)}% o la carga un ${Math.round(DELOAD.loadReduction * 100)}%. Luego vuelve al plan normal subiendo poco a poco.`;
+  const reasonCode = perfDrop ? 'deload_performance_drop' : multiStall ? 'deload_multi_stall' : 'deload_fatigue_accumulated';
+  return {
+    active: true,
+    sessions: Math.max(2, consecutiveDrops || 2),
+    dropPct: Math.max(0, dropPct),
+    reasons,
+    multiExerciseStall: stalledExercises,
+    reasonCode,
+    why: `Hay señales de cansancio acumulado: ${reasons.join(', ')}.`,
+    plan,
+    text: `Señales de cansancio acumulado (${reasons.join(', ')}). ${plan}`,
+    rule: RULES.deload,
+  };
 }
+
 
 export function recommendFor(data = {}, ex = {}) {
   const profile = { ...(data.profile || {}) };
@@ -717,6 +806,11 @@ export function recommendFor(data = {}, ex = {}) {
   const topLoad = roundLoad(loadFromKg(top, unit), unit);
   const topKg = kgFromLoad(topLoad, unit);
   const stepLoad = loadStepForEx(type, equipment, unit);
+  const reduceLoad = (load, pct) => {
+    const target = roundLoad(load * (1 - pct), unit, stepLoad);
+    if (target < load) return Math.max(loadMinFor(unit), target);
+    return Math.max(loadMinFor(unit), roundLoad(load - stepLoad, unit, stepLoad));
+  };
 
   if (history.length >= 2) {
     const prev = sessionInfo(history[1], baseTarget);
@@ -783,7 +877,7 @@ export function recommendFor(data = {}, ex = {}) {
   const refNow = Number(data.now) || Date.now();
   const daysSinceLast = last.date > 0 ? Math.round((refNow - last.date) / 864e5) : 0;
   if (daysSinceLast >= 14 && top > 0) {
-    const pauseLoad = Math.max(loadMinFor(unit), roundLoad(topLoad - stepLoad, unit, stepLoad));
+    const pauseLoad = reduceLoad(topLoad, 0.10);
     const pauseKg = kgFromLoad(pauseLoad, unit);
     return finalize({
       ...base,
@@ -802,7 +896,7 @@ export function recommendFor(data = {}, ex = {}) {
   const rirsLast = last.sets.filter((x) => !x.unconfirmed).map((x) => Number(x.rir)).filter((n) => Number.isFinite(n));
   const hasFailure = info.failed || rirsLast.some((r) => r === 0) || (last.sets || []).some((s) => s.failure);
   if (consecutiveFails || (hasFailure && !info.met)) {
-    const dropLoad = Math.max(loadMinFor(unit), roundLoad(topLoad - stepLoad, unit, stepLoad));
+    const dropLoad = reduceLoad(topLoad, 0.075);
     const dropKg = kgFromLoad(dropLoad, unit);
     return finalize({
       ...base,
@@ -1002,7 +1096,7 @@ const SCORE_LABELS = {
   load: 'Carga',
   effort: 'Esfuerzo (RIR)',
   rest: 'Descanso',
-  progress: 'Progress',
+  progress: 'Progreso',
 };
 
 const scoreGrade = (score) =>
@@ -1567,10 +1661,17 @@ export function streakInfo(data = {}, hoyMs = Date.now()) {
 }
 
 export function periodRange(opcion = '30 días', hoyMs = Date.now(), desde = null, hasta = null) {
-  const end = hoyMs;
+  const today = hoyMs;
+  let end = hoyMs;
   let start = end;
   let prevStart = null;
   let prevEnd = null;
+
+  const parseDay = (value, endOfDay) => {
+    if (!value) return null;
+    const ms = new Date(`${value}${endOfDay ? 'T23:59:59.999' : 'T00:00:00'}`).getTime();
+    return Number.isFinite(ms) ? ms : null;
+  };
 
   if (opcion === '7 días' || opcion === '7d' || opcion === 7) {
     const dur = 7 * 86400000;
@@ -1592,9 +1693,12 @@ export function periodRange(opcion = '30 días', hoyMs = Date.now(), desde = nul
     prevStart = null;
     prevEnd = null;
   } else if (opcion === 'Personalizado' || opcion === 'custom') {
-    start = desde ? new Date(desde).getTime() : end - 30 * 86400000;
-    const endMs = hasta ? new Date(hasta).getTime() : end;
-    const dur = Math.max(86400000, endMs - start);
+    const customStart = parseDay(desde, false);
+    const customEnd = parseDay(hasta, true);
+    start = customStart !== null ? customStart : end - 30 * 86400000;
+    end = customEnd !== null ? customEnd : today;
+    if (end < start) end = start;
+    const dur = Math.max(86400000, end - start);
     prevStart = start - dur;
     prevEnd = start;
   } else {
@@ -1644,7 +1748,6 @@ export function periodStats(data = {}, rango = {}, exId = null) {
       prevConsistency = expected > 0 ? `${Math.min(100, Math.round((prevSessionsCount / expected) * 100))}%` : '—';
     }
   }
-
   const avgScore = sessionsCount ? Math.round(ws.reduce((a, w) => a + (w.score?.score || 0), 0) / sessionsCount) : 0;
   const prevAvgScore = prevSessionsCount ? Math.round(prevWs.reduce((a, w) => a + (w.score?.score || 0), 0) / prevSessionsCount) : 0;
   const diffScore = avgScore - prevAvgScore;

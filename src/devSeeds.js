@@ -132,7 +132,7 @@ export const DEV_SEEDS = [
   },
   {
     id: "sin-entrenar",
-    label: "14 dZZDIAZas sin entrenar",
+    label: "14 días sin entrenar",
     data: {
       schemaVersion: 2,
       unit: "kg",

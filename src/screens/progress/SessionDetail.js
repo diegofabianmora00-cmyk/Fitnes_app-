@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal, ScrollView, TextInput, View, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Circle } from 'react-native-svg';
 import { C } from '../../theme';
 import { Card, Press, T, Btn } from '../../ui';
 import { toU, useStore } from '../../store';
@@ -19,13 +19,17 @@ const clock = (sec) => `${Math.floor((sec || 0) / 60)} min`;
 export default function SessionDetail({ visible, workout, onClose, initialFocusComment = false }) {
   const { data, update } = useStore();
   const ins = useSafeAreaInsets();
-  const [comment, setComment] = useState(() => (workout ? (workout.comment || '') : ''));
+  const [comment, setComment] = useState(workout ? (workout.comment || '') : '');
   const unit = data.unit || 'kg';
+
+  useEffect(() => {
+    setComment(workout ? (workout.comment || '') : '');
+  }, [workout?.id, workout?.comment, visible]);
 
   if (!workout) return null;
 
-  const review = workout.score && Number(workout.score.v) === 3 ? workout.score : sessionReview(data, workout);
-  const scoreVal = review.score || 0;
+  const review = workout.score && Number(workout.score.v) >= 5 ? workout.score : sessionReview(data, workout);
+  const scoreVal = Number.isFinite(review.score) ? review.score : 0;
   const components = review.components || [];
 
   const progressDiff = sessionProgress(data, workout);

@@ -3,7 +3,7 @@ import { ScrollView, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Line, Text as SvgText } from 'react-native-svg';
 import { C } from '../../theme';
-import { Card, H, T, Btn, FadeIn, Press } from '../../ui';
+import { Card, H, T, Btn, FadeIn } from '../../ui';
 import Coach from '../../Coach';
 
 export default function EmptyProgress({ onStartWorkout, onGoRoutines }) {

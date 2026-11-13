@@ -61,7 +61,7 @@ export default function Home({ go, start, isActive }) {
   const nextRoutineInfo = nextRoutineDay(data, now.getTime());
   const recordInfo = nearRecord(data, now.getTime());
 
-  const todayStr = now.toISOString().split('T')[0];
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const checkin = data.checkin && data.checkin.date === todayStr ? data.checkin.level : null;
 
   const handleCheckin = (level) => {
@@ -166,7 +166,9 @@ export default function Home({ go, start, isActive }) {
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               {weekDays.map((d, i) => (
                 <View key={i} style={{ alignItems: 'center', gap: 6 }}>
-                  <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: d.done ? C.accent : C.card2 }} />
+                  <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: d.done ? C.accent : C.card2, alignItems: 'center', justifyContent: 'center' }}>
+                    {d.done && <Ionicons name="checkmark" size={18} color={C.accentText} />}
+                  </View>
                   <T mute style={{ fontSize: 12 }}>{d.l}</T>
                 </View>
               ))}

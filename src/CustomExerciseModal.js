@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { C } from './theme';
 import { Btn, Card, Field, Press, T } from './ui';
 import { GROUPS } from './exercises';
+import { defaultLoadType } from './load';
 import { useStore, uid } from './store';
 
 const LOAD_TYPE_OPTIONS = [
@@ -26,7 +27,7 @@ export default function CustomExerciseModal({ visible, onClose, onCreated }) {
   const [name, setName] = useState('');
   const [group, setGroup] = useState('Pecho');
   const [equipment, setEquipment] = useState('Mancuernas');
-  const [loadType, setLoadType] = useState('barbell');
+  const [loadType, setLoadType] = useState('dumbbell');
   const [type, setType] = useState('aislamiento');
   const [muscles, setMuscles] = useState('');
 
@@ -113,7 +114,7 @@ export default function CustomExerciseModal({ visible, onClose, onCreated }) {
                 return (
                   <Press
                     key={eq}
-                    onPress={() => setEquipment(eq)}
+                    onPress={() => { setEquipment(eq); setLoadType(defaultLoadType(eq, '')); }}
                     style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, backgroundColor: on ? C.accent : C.card2, borderWidth: 1, borderColor: on ? C.accent : C.line }}
                   >
                     <T style={{ fontSize: 14, fontWeight: '600', color: on ? C.accentText : C.text }}>{eq}</T>

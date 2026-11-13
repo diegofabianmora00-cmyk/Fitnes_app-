@@ -304,8 +304,8 @@ describe('nuevas funciones de progreso y rachas', () => {
 
   it('periodRange maneja rango personalizado y datos sin unit', () => {
     const r = periodRange('Personalizado', NOW, '2026-10-01', '2026-10-10');
-    expect(r.start).toBeDefined();
-    expect(r.end).toBeDefined();
+    expect(r.start).toBe(new Date('2026-10-01T00:00:00').getTime());
+    expect(r.end).toBe(new Date('2026-10-10T23:59:59.999').getTime());
     const stats = periodStats({ workouts: [], unit: undefined }, r);
     expect(stats.sessions).toBe(0);
   });
@@ -412,7 +412,7 @@ describe('nuevas reglas del motor de recomendaciones', () => {
       makeEx()
     );
     expect(res.action).toBe('down');
-    expect(res.weightKg).toBe(57.5);
+    expect(res.weightKg).toBe(55);
   });
 
   it('RIR que decide: RIR 4-5 permite subir antes, RIR 0 impide subir', () => {
@@ -437,7 +437,7 @@ describe('nuevas reglas del motor de recomendaciones', () => {
     };
     const res = recommendFor(d, makeEx());
     expect(res.action).toBe('pause');
-    expect(res.weightKg).toBe(57.5);
+    expect(res.weightKg).toBe(55);
   });
 
   it('incrementos por ejercicio: aislamiento usa incremento minimo', () => {

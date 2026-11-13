@@ -1,7 +1,10 @@
-// Motor puro de autoregulación en vivo (sin React).
+﻿// Motor puro de autoregulación en vivo (sin React).
 // Decide la siguiente serie y la próxima sesión a partir de lo que acaba de hacer el usuario.
+// Cada decisión devuelve reasonCode y una frase corta (why/reason). Criterio de la app salvo fuentes indicadas.
 
 import { GYM_DEFAULT, defaultLoadType, nearestLoadable } from './load';
+import { analyzeRir } from './rir';
+import { READINESS, REST, FATIGUE, HYSTERESIS, FIRST_TIME, APP_HEURISTIC } from './config';
 
 const KG_PER_LB = 2.20462;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -78,10 +81,24 @@ export function rirTargetFor(profile = {}, setIndex = 0, totalSets = 3, type = '
 export function e1rmKg(w, reps, rir) {
   const weight = Number(w) || 0;
   const r = Number(reps) || 0;
+  if (!(r > 0)) return null;
+  if (!(weight > 0)) {
+    // Peso corporal/sin carga: no hay e1RM en kg; devuelve null sin fallar.
+    return null;
+  }
   const rawRir = Number(rir);
   const rr = Number.isFinite(rawRir) && rawRir >= 0 ? rawRir : 0;
-  if (!(weight > 0) || !(r > 0) || r + rr > 15) return null;
+  if (r + rr > 15) return null;
   return round2(weight * (1 + (r + rr) / 30));
+}
+
+// Para ejercicios sin carga: métrica de rendimiento basada en reps (equivalente relativo).
+export function bodyweightPerformance(reps, rir) {
+  const r = Number(reps) || 0;
+  if (!(r > 0)) return null;
+  const rawRir = Number(rir);
+  const rr = Number.isFinite(rawRir) && rawRir >= 0 ? rawRir : 0;
+  return round2(r + rr);
 }
 
 export function repsAtLoadKg(w, e1rm, rir) {
@@ -107,9 +124,24 @@ export function readiness(firstSetE1rm, refE1rm) {
   const ref = Number(refE1rm) || 0;
   if (!(first > 0) || !(ref > 0)) return 'normal';
   const ratio = first / ref;
-  if (ratio < 0.9) return 'low';
-  if (ratio > 1.05) return 'high';
+  if (ratio < READINESS.lowRatio) return 'low';
+  if (ratio > READINESS.highRatio) return 'high';
   return 'normal';
+}
+
+// Histéresis/tendencia: confirma estado con N de las últimas M observaciones.
+export function readinessFromSeries(perfValues = [], refValue = 0) {
+  const ref = Number(refValue) || 0;
+  const vals = (perfValues || []).map(Number).filter((v) => v > 0);
+  if (!(ref > 0) || !vals.length) return 'normal';
+  const recent = vals.slice(0, READINESS.window);
+  const states = recent.map((v) => (v / ref < READINESS.lowRatio ? 'low' : v / ref > READINESS.highRatio ? 'high' : 'normal'));
+  const count = (s) => states.filter((x) => x === s).length;
+  if (states.length >= 2) {
+    if (count('low') >= READINESS.confirmPoints) return 'low';
+    if (count('high') >= READINESS.confirmPoints) return 'high';
+  }
+  return states[0] || 'normal';
 }
 
 function setsFromHistory(history, exId) {
@@ -160,15 +192,18 @@ function sessionHistory(data = {}, exId) {
   return out;
 }
 
-function bestRecentE1rm(history, limit = 5) {
-  let best = 0;
+function bestRecentPerformance(history, limit = 5) {
+  let bestE1 = 0;
+  let bestBw = 0;
   for (const session of history.slice(0, limit)) {
     for (const set of session.sets || []) {
       const e = e1rmKg(set.w, set.r, set.rir);
-      if (e && e > best) best = e;
+      if (e && e > bestE1) bestE1 = e;
+      const bw = bodyweightPerformance(set.r, set.rir);
+      if (bw && bw > bestBw) bestBw = bw;
     }
   }
-  return best;
+  return { bestE1rm: bestE1, bestBw };
 }
 
 function planFrom(startPlan = {}, guide = {}, fallbackRir = 2) {
@@ -226,28 +261,30 @@ function restAdjustment(actualRest, targetRest, { easy = false, hard = false, ap
   const target = Math.max(0, Math.round(Number(targetRest) || 0));
   const actual = Number(actualRest);
   if (!apply || !(target > 0) || !Number.isFinite(actual) || actual <= 0) {
-    return { restSec: target, kind: 'ok', note: null, lockWeight: false };
+    return { restSec: target, kind: 'ok', note: null, lockWeight: false, reasonCode: 'rest_ok' };
   }
   const ratio = actual / target;
-  if (ratio < 0.8) {
-    const add = hard ? 60 : 30;
+  if (ratio < REST.shortRatio) {
+    const add = hard ? REST.addSecShortHard : REST.addSecShort;
     return {
       restSec: target + add,
       kind: 'short',
       note: `Descansaste ${Math.round(actual)} s de ${target} s; subo el siguiente descanso a ${target + add} s.`,
       lockWeight: false,
+      reasonCode: 'rest_short',
     };
   }
-  if (ratio > 1.3) {
-    const restSec = easy ? Math.max(30, target - 15) : target;
+  if (ratio > REST.longRatio) {
+    const restSec = easy ? Math.max(30, target - REST.cutSecLongEasy) : target;
     return {
       restSec,
       kind: 'long',
       note: `Descansaste ${Math.round(actual)} s de ${target} s; no cambio el peso${easy ? ' y recorto 15 s' : ''}.`,
       lockWeight: true,
+      reasonCode: 'rest_long',
     };
   }
-  return { restSec: target, kind: 'ok', note: null, lockWeight: false };
+  return { restSec: target, kind: 'ok', note: null, lockWeight: false, reasonCode: 'rest_ok' };
 }
 
 export function nextSetPlan({
@@ -272,6 +309,7 @@ export function nextSetPlan({
   const nextTarget = rirTargetFor(profile, nextIndex, total, type);
   const currentTarget = rirTargetFor(profile, idx, total, type);
   const last = sets[idx] || null;
+  const prev = idx > 0 ? sets[idx - 1] : null;
   const guide = (last && last.guide) || {};
   const plan = planFrom(startPlan, guide, currentTarget.target);
   const targetReps = plan.reps || Math.max(1, Number(ex.reps) || range.min);
@@ -280,33 +318,41 @@ export function nextSetPlan({
   const restGoal = Math.max(0, Math.round(Number(restTarget ?? plan.restSec) || restFor(profile, type)));
 
   if (idx >= total - 1) {
+    const summary = nextSessionPlan({ data, ex, sessionSets: sets });
     return {
       done: true,
       action: 'summary',
+      reasonCode: 'set_last_summary',
       setNumber: null,
       weightKg: null,
       reps: null,
       rir: null,
       restSec: restGoal,
       reason: 'Última serie del ejercicio: guardo el resumen para la próxima sesión.',
+      why: 'Terminaste las series; el resumen ayuda a planear la próxima sesión.',
       readiness: 'normal',
       restNote: null,
       volumeNote: null,
-      summary: nextSessionPlan({ data, ex, sessionSets: sets }),
+      summary,
       guide: null,
     };
   }
 
   if (!last) {
+    const startWhy = (plan.weightKg || 0) > 0
+      ? 'Sigo el plan inicial para empezar la serie.'
+      : `Empieza con un peso con el que te queden ${FIRST_TIME.rirMin}-${FIRST_TIME.rirMax} repeticiones en reserva (RIR ${FIRST_TIME.rirMin}-${FIRST_TIME.rirMax}). Ejemplo: si apuntas a ${targetReps} reps, elige una carga que podrías levantar ${targetReps + 2} o ${targetReps + 3} veces.`;
     return {
       done: false,
       action: 'maintain',
+      reasonCode: (plan.weightKg || 0) > 0 ? 'set_start_plan' : 'set_first_time',
       setNumber: nextIndex + 1,
       weightKg: plan.weightKg,
       reps: targetReps,
       rir: nextTarget.target,
       restSec: restGoal,
-      reason: 'Aún no hay serie registrada; mantengo el plan inicial.',
+      reason: startWhy,
+      why: startWhy,
       readiness: 'normal',
       restNote: null,
       volumeNote: null,
@@ -317,36 +363,44 @@ export function nextSetPlan({
   const lastW = Number(last.w) || 0;
   const lastR = Number(last.r) || 0;
   const rawRir = last.rir;
-  const lastRirRaw = Number(rawRir);
-  const hasRir = rawRir !== null && rawRir !== undefined && rawRir !== '' && Number.isFinite(lastRirRaw);
+  const hasRir = rawRir !== null && rawRir !== undefined && rawRir !== '' && Number.isFinite(Number(rawRir));
   const unconfirmed = !!last.unconfirmed;
-  const failure = (hasRir && lastRirRaw <= 0) || !!last.failure;
-  const bodyweight = loadType === 'bodyweight';
-  const easy = hasRir && lastRirRaw >= currentTarget.hi;
-  const hard = failure || (hasRir && lastRirRaw <= currentTarget.lo - 1) || lastR < repMin;
+  const failure = (hasRir && Number(rawRir) <= 0) || !!last.failure;
+  const bodyweight = loadType === 'bodyweight' || (!(lastW > 0) && loadType !== 'barbell' && loadType !== 'dumbbell' && loadType !== 'stack' && loadType !== 'plates');
+  const rirInfo = analyzeRir({ set: last, prevSet: prev, targetReps, profile });
+  const effRir = rirInfo.effectiveRir;
+  const easy = hasRir && effRir >= currentTarget.hi;
+  const hard = failure || effRir <= currentTarget.lo - 1 || lastR < repMin;
   const restInfo = restAdjustment(last.restBeforeSec, restGoal, { easy, hard, apply: idx > 0 });
   const history = sessionHistory(data, ex.id);
-  const refE1 = bestRecentE1rm(history);
-  const lastE1 = e1rmKg(lastW, lastR, hasRir ? lastRirRaw : 0);
-  const ready = idx === 0 && lastE1 && refE1 ? readiness(lastE1, refE1) : 'normal';
+  const refPerf = bestRecentPerformance(history);
+  const lastE1 = e1rmKg(lastW, lastR, effRir);
+  const lastBw = bodyweightPerformance(lastR, effRir);
+  const perfNow = bodyweight ? lastBw : lastE1;
+  const perfRef = bodyweight ? refPerf.bestBw : refPerf.bestE1rm;
+  const ready = idx === 0 && perfNow && perfRef ? readiness(perfNow, perfRef) : 'normal';
 
   const baseOut = (extra) => {
     const weightKg = round2(extra.weightKg ?? plan.weightKg);
     const reps = Math.max(1, Math.round(extra.reps ?? targetReps));
     const rir = clamp(Math.round(extra.rir ?? nextTarget.target), 0, 10);
     const restSec = Math.max(0, Math.round(extra.restSec ?? restInfo.restSec));
+    const why = extra.why || extra.reason || '';
     return {
       done: false,
       action: extra.action || 'maintain',
+      reasonCode: extra.reasonCode || 'set_maintain',
       setNumber: nextIndex + 1,
       weightKg,
       reps,
       rir,
       restSec,
-      reason: extra.reason || '',
+      reason: extra.reason || why,
+      why,
       readiness: extra.readiness || ready,
       restNote: extra.restNote ?? restInfo.note,
       volumeNote: extra.volumeNote || null,
+      confidence: extra.confidence || rirInfo.confidence,
       guide: { weightKg, reps, rir, restSec },
     };
   };
@@ -354,34 +408,45 @@ export function nextSetPlan({
   if (bodyweight) {
     const baseWeight = lastW > 0 ? lastW : plan.weightKg || 0;
     let reps = targetReps;
-    let reason = `Sin peso externo: mantengo ${reps} reps y busco buena técnica.`;
-    if (hasRir && lastRirRaw <= currentTarget.lo - 1) {
-      reps = Math.max(1, Math.min(targetReps, lastR));
-      reason = `Sin peso externo y RIR ${lastRirRaw}: mantengo ${reps} reps y sumo descanso.`;
-    } else if (hasRir && lastRirRaw >= currentTarget.hi && lastR >= targetReps) {
-      reps = Math.min(repMax, Math.max(targetReps + 1, lastR + 1));
-      reason = `Sin peso externo: subo a ${reps} reps porque te sobró margen (RIR ${lastRirRaw}).`;
+    let reason = `Sin peso externo: mantengo ${reps} repeticiones y cuido la técnica.`;
+    let reasonCode = 'bw_maintain';
+    let action = 'bodyweight';
+    if (effRir <= currentTarget.lo - 1) {
+      const baseReps = lastR > 0 ? lastR : targetReps;
+      reps = Math.max(1, Math.min(targetReps, baseReps) - 1);
+      reason = `Sin peso externo: baja a ${reps} repeticiones o usa una variante más fácil para recuperar margen.`;
+      reasonCode = 'bw_easier';
+    } else if (effRir >= currentTarget.hi && lastR >= targetReps) {
+      reps = Math.max(targetReps + 1, lastR + 1);
+      reason = `Sin peso externo: sube a ${reps} repeticiones o prueba una variante más difícil (más lento o más rango).`;
+      reasonCode = 'bw_harder';
     }
-    return baseOut({ action: 'bodyweight', weightKg: baseWeight, reps, reason });
+    return baseOut({ action, reasonCode, weightKg: baseWeight, reps, reason, why: reason });
   }
 
   if (unconfirmed || !hasRir) {
+    const why = unconfirmed
+      ? 'Serie sin confirmar: no cambio el peso y mantengo el objetivo.'
+      : 'Sin RIR reportado: no cambio el peso y uso las repeticiones como guía.';
     return baseOut({
       action: 'maintain',
+      reasonCode: unconfirmed ? 'set_unconfirmed' : 'set_missing_rir',
       weightKg: lastW || plan.weightKg,
       reps: targetReps,
-      reason: unconfirmed
-        ? 'Serie sin confirmar: no cambio el peso; solo ajusto reps y descanso.'
-        : 'Sin RIR no puedo juzgar el esfuerzo: no cambio el peso; solo ajusto reps y descanso.',
+      reason: why,
+      why,
+      confidence: rirInfo.confidence,
     });
   }
 
   if (restInfo.lockWeight) {
     return baseOut({
       action: 'maintain',
+      reasonCode: 'rest_long_lock',
       weightKg: lastW || plan.weightKg,
       reps: targetReps,
       reason: restInfo.note || 'Descanso largo: mantengo el peso.',
+      why: 'Descansaste más de lo previsto; mantener el peso evita confundir el cansancio con el peso.',
     });
   }
 
@@ -390,91 +455,120 @@ export function nextSetPlan({
   const downKg = shiftLoadKg(loadType, current, -1, g, unit);
 
   if (failure) {
-    const volumeNote =
-      idx === 0 && refE1 > 0 && lastE1 && lastE1 < refE1 * 0.9
-        ? 'La primera serie quedó muy por debajo de tu rendimiento reciente; valora hacer una serie menos hoy.'
-        : null;
+    const volumeNote = idx === 0 && perfRef > 0 && perfNow && perfNow < perfRef * READINESS.lowRatio
+      ? 'La primera serie rindió menos de lo habitual; valora hacer una serie menos hoy.'
+      : null;
+    const why = `La serie quedó muy exigente (RIR efectivo ${effRir}). Bajar un paso ayuda a completar las repeticiones con buena técnica.`;
     return baseOut({
       action: 'down',
+      reasonCode: 'set_failure_down',
       weightKg: downKg,
       reps: targetReps,
       rir: Math.min(nextTarget.hi, nextTarget.target + 1),
       restSec: restGoal + 60,
-      reason: `Bajé a ${fmtKg(downKg, unit)} porque la serie ${idx + 1} quedó a RIR 0 (fallo).`,
+      reason: `Bajé a ${fmtKg(downKg, unit)} porque la serie ${idx + 1} llegó al fallo (RIR 0).`,
+      why,
       volumeNote,
+      confidence: rirInfo.confidence,
     });
   }
 
   if (idx === 0 && ready === 'low') {
+    const pct = perfRef > 0 ? Math.round((perfNow / perfRef) * 100) : 0;
+    const why = `La primera serie rindió ${pct}% de tu mejor reciente; mantener el peso protege la sesión.`;
     return baseOut({
       action: 'maintain',
+      reasonCode: 'readiness_low',
       weightKg: current,
       reps: targetReps,
       rir: Math.min(nextTarget.hi, nextTarget.target + 1),
-      reason: `Día flojo: la primera serie rindió ${Math.round((lastE1 / refE1) * 100)}% de tu mejor reciente; mantengo el peso y subo el RIR objetivo.`,
+      reason: `Día flojo: mantengo el peso y subo el RIR objetivo.`,
+      why,
       volumeNote: 'Si sigues por debajo de lo normal, valora una serie menos hoy.',
     });
   }
 
-  if (idx === 0 && ready === 'high' && lastRirRaw >= currentTarget.hi) {
+  if (idx === 0 && ready === 'high' && effRir >= currentTarget.hi) {
+    const pct = perfRef > 0 ? Math.round((perfNow / perfRef) * 100) : 0;
+    const why = `La primera serie rindió ${pct}% de tu mejor reciente con margen; subir un paso aprovecha el buen día.`;
     return baseOut({
       action: 'up',
+      reasonCode: 'readiness_high_up',
       weightKg: upKg,
       reps: targetReps,
       rir: nextTarget.target,
-      reason: `Día fuerte: la primera serie rindió ${Math.round((lastE1 / refE1) * 100)}% de tu mejor reciente y sobró margen; subo un paso.`,
+      reason: `Día fuerte: subo un paso.`,
+      why,
     });
   }
 
-  if (lastRirRaw <= currentTarget.lo - 1 || lastR < repMin) {
+  if (effRir <= currentTarget.lo - 1 || lastR < repMin) {
+    const why = lastR < repMin
+      ? `Hiciste ${lastR} repeticiones, por debajo del mínimo ${repMin}; bajar un paso ayuda a cumplir el rango.`
+      : `La serie quedó con poco margen (RIR efectivo ${effRir}); bajar un paso facilita las siguientes.`;
     return baseOut({
       action: 'down',
+      reasonCode: lastR < repMin ? 'reps_below_min' : 'rir_below_target',
       weightKg: downKg,
       reps: targetReps,
       rir: Math.min(nextTarget.hi, nextTarget.target + 1),
-      restSec: restGoal + (lastRirRaw <= 0 ? 60 : 30),
-      reason:
-        lastR < repMin
-          ? `Bajé a ${fmtKg(downKg, unit)} porque la serie ${idx + 1} hizo ${lastR} reps, por debajo del mínimo ${repMin}.`
-          : `Bajé a ${fmtKg(downKg, unit)} porque la serie ${idx + 1} quedó a RIR ${lastRirRaw}, por debajo del rango ${currentTarget.lo}-${currentTarget.hi}.`,
+      restSec: restGoal + 30,
+      reason: why,
+      why,
+      confidence: rirInfo.confidence,
     });
   }
 
-  if (lastRirRaw >= currentTarget.hi + 1 && lastR >= targetReps) {
+  if (effRir >= currentTarget.hi + 1 && lastR >= targetReps) {
+    const why = `Te sobró margen (RIR efectivo ${effRir}) con ${lastR} repeticiones; subir un paso mantiene el reto.`;
     return baseOut({
       action: 'up',
+      reasonCode: 'rir_above_target_up',
       weightKg: upKg,
       reps: targetReps,
       rir: nextTarget.target,
-      reason: `Subí a ${fmtKg(upKg, unit)} porque la serie ${idx + 1} quedó a RIR ${lastRirRaw} con ${lastR} reps.`,
+      reason: `Subí a ${fmtKg(upKg, unit)} porque sobró margen.`,
+      why,
+      confidence: rirInfo.confidence,
     });
   }
 
-  if (lastR >= repMax && lastRirRaw >= currentTarget.target) {
+  if (lastR >= repMax && effRir >= currentTarget.target) {
+    const why = `Llegaste al tope del rango (${repMax} reps) con margen; subir un paso es el siguiente avance.`;
     return baseOut({
       action: 'up',
+      reasonCode: 'reps_at_top_up',
       weightKg: upKg,
       reps: targetReps,
       rir: nextTarget.target,
-      reason: `Subí a ${fmtKg(upKg, unit)} porque llegaste al tope del rango (${repMax} reps) con RIR ${lastRirRaw}.`,
+      reason: `Subí a ${fmtKg(upKg, unit)} porque llegaste al tope del rango.`,
+      why,
     });
   }
 
-  if (lastR > targetReps && lastRirRaw >= currentTarget.lo && lastRirRaw <= currentTarget.hi) {
+  if (lastR > targetReps && effRir >= currentTarget.lo && effRir <= currentTarget.hi) {
     const reps = Math.min(repMax, targetReps + 1);
+    const why = `Hiciste ${lastR} repeticiones dentro del esfuerzo objetivo; sumar una repetición es un progreso seguro.`;
     return baseOut({
       action: 'maintain',
+      reasonCode: 'reps_progress',
       weightKg: current,
       reps,
-      reason: `Mantengo ${fmtKg(current, unit)} y subo el objetivo a ${reps} reps porque hiciste ${lastR} con RIR ${lastRirRaw}.`,
+      reason: `Mantengo ${fmtKg(current, unit)} y subo el objetivo a ${reps} repeticiones.`,
+      why,
+      confidence: rirInfo.confidence,
     });
   }
 
+  const why = `La serie quedó dentro del objetivo (RIR efectivo ${effRir}, ${lastR} repeticiones).`;
   return baseOut({
     action: 'maintain',
+    reasonCode: 'set_on_target',
     weightKg: current,
     reps: targetReps,
-    reason: `Mantengo ${fmtKg(current, unit)}: la serie ${idx + 1} quedó dentro del objetivo (RIR ${lastRirRaw}, ${lastR} reps).`,
+    reason: `Mantengo ${fmtKg(current, unit)}: estás dentro del objetivo.`,
+    why,
+    confidence: rirInfo.confidence,
   });
 }
 
@@ -492,25 +586,27 @@ export function nextSessionPlan({ data = {}, ex = {}, sessionSets = [] } = {}) {
   if (!confirmed.length) {
     return {
       action: 'start',
+      reasonCode: 'session_first_time',
       weightKg: null,
       reps: targetReps,
       rir: target.target,
       restSec: restFor(profile, type),
-      reason: 'Sin series confirmadas: la próxima sesión empieza con el mismo plan.',
-      title: 'Sin datos',
+      reason: `Sin series confirmadas. Elige un peso con el que te queden ${FIRST_TIME.rirMin}-${FIRST_TIME.rirMax} repeticiones en reserva (RIR ${FIRST_TIME.rirMin}-${FIRST_TIME.rirMax}). Ejemplo: si apuntas a ${targetReps} repeticiones, usa una carga que podrías levantar ${targetReps + 2} o ${targetReps + 3} veces.`,
+      why: 'Con RIR 2-3 aprendes el peso correcto sin llegar al fallo.',
+      title: 'Primera vez',
     };
   }
 
   const topW = Math.max(0, ...confirmed.map((s) => Number(s.w) || 0));
-  const rirs = confirmed
-    .filter((s) => s.rir !== null && s.rir !== undefined && s.rir !== '')
-    .map((s) => Number(s.rir))
-    .filter(Number.isFinite);
-  const avgRir = rirs.length ? rirs.reduce((a, b) => a + b, 0) / rirs.length : null;
+  const rirInfos = confirmed.map((s, i) => analyzeRir({ set: s, prevSet: i > 0 ? confirmed[i - 1] : null, targetReps, profile }));
+  const effRirs = rirInfos.map((x) => x.effectiveRir).filter(Number.isFinite);
+  const avgRir = effRirs.length ? effRirs.reduce((a, b) => a + b, 0) / effRirs.length : null;
+  const lowConf = rirInfos.some((x) => x.confidence === 'baja');
   const bestE1 = Math.max(0, ...confirmed.map((s) => e1rmKg(s.w, s.r, s.rir) || 0));
+  const bestBw = Math.max(0, ...confirmed.map((s) => bodyweightPerformance(s.r, s.rir) || 0));
   const allMet = confirmed.every((s) => Number(s.r) >= targetReps);
-  const bodyweight = loadType === 'bodyweight';
-  const failure = rirs.some((r) => r <= 0) || confirmed.some((s) => s.failure);
+  const bodyweight = loadType === 'bodyweight' || (!(topW > 0) && loadType !== 'barbell' && loadType !== 'dumbbell' && loadType !== 'stack' && loadType !== 'plates');
+  const failure = effRirs.some((r) => r <= 0) || confirmed.some((s) => s.failure);
   const hard = failure || (avgRir !== null && avgRir <= target.lo - 1) || confirmed.some((s) => Number(s.r) < range.min);
   const easy = avgRir !== null && avgRir >= target.hi && allMet;
 
@@ -519,24 +615,36 @@ export function nextSessionPlan({ data = {}, ex = {}, sessionSets = [] } = {}) {
     const maxReps = Math.max(...confirmed.map((s) => Number(s.r) || 0));
     let reps = targetReps;
     let action = 'maintain';
-    let reason = `Sin peso externo: la próxima sesión busca ${reps} reps con buena técnica.`;
+    let reasonCode = 'bw_session_maintain';
+    let reason = `Sin peso externo: la próxima sesión busca ${reps} repeticiones con buena técnica.`;
+    let why = 'Avanzar de forma gradual ayuda a mejorar sin perder técnica.';
     if (hard) {
       reps = Math.max(1, minReps);
-      reason = `Sin peso externo: la próxima sesión mantiene ${reps} reps y prioriza recuperarte.`;
+      action = 'maintain';
+      reasonCode = 'bw_session_easier';
+      reason = `Sin peso externo: la próxima sesión usa ${reps} repeticiones o una variante más fácil.`;
+      why = 'Bajar las repeticiones o hacer una variante más fácil te ayuda a recuperar.';
     } else if (easy || (allMet && maxReps >= range.max)) {
-      reps = Math.min(range.max + 2, maxReps + 1);
+      reps = Math.max(maxReps + 1, targetReps + 1);
       action = 'up';
-      reason = `Sin peso externo: la próxima sesión sube a ${reps} reps.`;
+      reasonCode = 'bw_session_harder';
+      reason = `Sin peso externo: la próxima sesión sube a ${reps} repeticiones o prueba una variante más difícil.`;
+      why = 'Te sobró margen; más repeticiones o una variante más difícil mantienen el progreso.';
     }
     return {
       action,
+      reasonCode,
       weightKg: topW > 0 ? topW : 0,
       reps,
       rir: target.target,
       restSec: restFor(profile, type),
       reason,
-      title: action === 'up' ? 'Suma una repetición' : 'Mantén las repeticiones',
+      why,
+      title: action === 'up' ? 'Suma repeticiones' : 'Mantén las repeticiones',
       bestE1rm: round2(bestE1),
+      bestPerformance: round2(bestBw),
+      confidence: lowConf ? 'baja' : 'media',
+      heuristic: APP_HEURISTIC,
     };
   }
 
@@ -546,37 +654,46 @@ export function nextSessionPlan({ data = {}, ex = {}, sessionSets = [] } = {}) {
   if (hard) {
     return {
       action: 'down',
+      reasonCode: 'session_down',
       weightKg: downKg,
       reps: targetReps,
       rir: Math.min(target.hi, target.target + 1),
       restSec: restFor(profile, type),
-      reason: `La próxima sesión baja a ${fmtKg(downKg, unit)}: hubo fallo o reps por debajo del objetivo.`,
+      reason: `La próxima sesión baja a ${fmtKg(downKg, unit)} para recuperar el rango.`,
+      why: 'Hubo poco margen o pocas repeticiones; bajar un paso ayuda a volver al objetivo.',
       title: 'Baja un paso',
       bestE1rm: round2(bestE1),
+      confidence: lowConf ? 'baja' : 'media',
     };
   }
 
   if (easy) {
     return {
       action: 'up',
+      reasonCode: 'session_up',
       weightKg: upKg,
       reps: targetReps,
       rir: target.target,
       restSec: restFor(profile, type),
-      reason: `La próxima sesión sube a ${fmtKg(upKg, unit)}: sobró margen (RIR medio ${round1(avgRir)}).`,
+      reason: `La próxima sesión sube a ${fmtKg(upKg, unit)}.`,
+      why: 'Sobró margen en las series; subir un paso mantiene el progreso.',
       title: 'Sube el peso',
       bestE1rm: round2(bestE1),
+      confidence: lowConf ? 'baja' : 'media',
     };
   }
 
   return {
     action: 'maintain',
+    reasonCode: 'session_maintain',
     weightKg: topW,
     reps: targetReps,
     rir: target.target,
     restSec: restFor(profile, type),
-    reason: `La próxima sesión mantiene ${fmtKg(topW, unit)} y busca ${targetReps} reps con RIR ${target.target}.`,
+    reason: `La próxima sesión mantiene ${fmtKg(topW, unit)} y busca ${targetReps} repeticiones con RIR ${target.target}.`,
+    why: 'Estás cerca del objetivo; mantener consolida la técnica y el rendimiento.',
     title: 'Mantén el peso',
     bestE1rm: round2(bestE1),
+    confidence: lowConf ? 'baja' : 'media',
   };
 }

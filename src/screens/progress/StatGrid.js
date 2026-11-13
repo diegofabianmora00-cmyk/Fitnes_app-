@@ -25,14 +25,14 @@ export default function StatGrid({ stats }) {
           <Card style={{ padding: 16, height: 110, justifyContent: 'space-between' }}>
             <T mute style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.12 * 12 }}>{items[0].label}</T>
             <T style={{ fontSize: 28, fontWeight: '800', color: C.text, marginVertical: 4 }}>{items[0].value}</T>
-            <T mute style={{ fontSize: 11, numberOfLines: 1 }}>{items[0].diff}</T>
+            <T mute style={{ fontSize: 11 }} numberOfLines={1}>{items[0].diff}</T>
           </Card>
         </View>
         <View style={{ flex: 1 }}>
           <Card style={{ padding: 16, height: 110, justifyContent: 'space-between' }}>
             <T mute style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.12 * 12 }}>{items[1].label}</T>
             <T style={{ fontSize: 28, fontWeight: '800', color: C.text, marginVertical: 4 }}>{items[1].value}</T>
-            <T mute style={{ fontSize: 11, numberOfLines: 1 }}>{items[1].diff}</T>
+            <T mute style={{ fontSize: 11 }} numberOfLines={1}>{items[1].diff}</T>
           </Card>
         </View>
       </View>
@@ -41,14 +41,14 @@ export default function StatGrid({ stats }) {
           <Card style={{ padding: 16, height: 110, justifyContent: 'space-between' }}>
             <T mute style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.12 * 12 }}>{items[2].label}</T>
             <T style={{ fontSize: 28, fontWeight: '800', color: C.text, marginVertical: 4 }}>{items[2].value}</T>
-            <T mute style={{ fontSize: 11, numberOfLines: 1 }}>{items[2].diff}</T>
+            <T mute style={{ fontSize: 11 }} numberOfLines={1}>{items[2].diff}</T>
           </Card>
         </View>
         <View style={{ flex: 1 }}>
           <Card style={{ padding: 16, height: 110, justifyContent: 'space-between' }}>
             <T mute style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.12 * 12 }}>{items[3].label}</T>
             <T style={{ fontSize: 28, fontWeight: '800', color: C.text, marginVertical: 4 }}>{items[3].value}</T>
-            <T mute style={{ fontSize: 11, numberOfLines: 1 }}>{items[3].diff}</T>
+            <T mute style={{ fontSize: 11 }} numberOfLines={1}>{items[3].diff}</T>
           </Card>
         </View>
       </View>

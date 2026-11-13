@@ -4,9 +4,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { C } from '../theme';
 import { Btn, Card, FadeIn, Field, H, Press, T } from '../ui';
-import { KEYS, migrate, seed, toU, useStore } from '../store';
+import { KEYS, fromU, migrate, seed, toU, useStore } from '../store';
 import { DEV_SEEDS } from '../devSeeds';
-import { GOALS, LEVELS, REST_STYLES, RULES, JOINT_FOCUSES, labelOf } from '../recommend';
+import { GOALS, LEVELS, REST_STYLES, RULES, JOINT_FOCUSES, labelOf, newRecords, sessionReview } from '../recommend';
 import { COACH_TONES } from '../coachMemory';
 import ProfileSetup from './ProfileSetup';
 import CustomExerciseModal from '../CustomExerciseModal';
@@ -65,6 +65,38 @@ export default function Settings() {
     } catch (e) {
       Dialog.alert('Error de formato', 'El texto ingresado no es un JSON válido.');
     }
+  };
+
+  const saveEditedWorkout = () => {
+    if (!editingWorkout) return;
+    const num = (value) => {
+      const n = parseFloat(String(value ?? '').replace(',', '.'));
+      return Number.isFinite(n) ? n : 0;
+    };
+    const cleaned = {
+      ...editingWorkout,
+      exercises: (editingWorkout.exercises || []).map((ex) => ({
+        ...ex,
+        sets: (ex.sets || []).map((s) => ({
+          ...s,
+          w: fromU(num(s.w), data.unit),
+          r: Math.round(num(s.r)),
+        })),
+      })),
+    };
+    const rest = (data.workouts || []).filter((w) => w.id !== cleaned.id);
+    const records = newRecords({ ...data, workouts: rest }, cleaned);
+    records.forEach((r) => {
+      const ex = cleaned.exercises[r.exIndex];
+      const set = ex && ex.sets[r.setIndex];
+      if (set) set.pr = true;
+    });
+    cleaned.prs = records.map(({ exId, name, kind, weightKg, reps }) => ({ exId, name, kind, weightKg, reps }));
+    cleaned.score = sessionReview({ ...data, workouts: rest }, cleaned);
+    update((d) => migrate({ ...d, workouts: [cleaned, ...rest] }));
+    setShowEditWorkout(false);
+    setEditingWorkout(null);
+    Dialog.alert('Actualizado', 'La sesión de ejercicio se ha corregido y los récords se han recalculado.');
   };
 
   const checkUpdates = async () => {
@@ -674,7 +706,7 @@ export default function Settings() {
                           <View style={{ flex: 1 }}>
                             <T mute style={{ fontSize: 10, marginBottom: 2 }}>Peso ({data.unit})</T>
                             <Field
-                              value={String(s.w ?? '')}
+                              value={Number(s.w) > 0 ? String(Math.round(toU(Number(s.w), data.unit) * 10) / 10) : ''}
                               onChangeText={(val) => {
                                 const nextExs = [...editingWorkout.exercises];
                                 nextExs[exIdx].sets[sIdx].w = val;
@@ -705,13 +737,7 @@ export default function Settings() {
                   <View style={{ gap: 10, marginTop: 10 }}>
                     <Btn
                       label="Guardar cambios"
-                      onPress={() => {
-                        const updatedWorkouts = (data.workouts || []).map((w) => w.id === editingWorkout.id ? editingWorkout : w);
-                        update((d) => migrate({ ...d, workouts: updatedWorkouts }));
-                        setShowEditWorkout(false);
-                        setEditingWorkout(null);
-                        Dialog.alert('Actualizado', 'La sesión de ejercicio se ha corregido y los récords se han recalculado.');
-                      }}
+                      onPress={saveEditedWorkout}
                     />
                     <Btn
                       kind="ghost"

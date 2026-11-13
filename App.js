@@ -19,13 +19,14 @@ import { Dialog, DialogHost } from './src/Dialog';
 import { APP_VERSION, isUpdateAvailable } from './src/version';
 import { fetchLatestUpdate, getSeenUpdate } from './src/updates';
 import { promptUpdate } from './src/UpdatePrompt';
+import { HomeIcon, RoutinesIcon, ProgressIcon } from './src/navIcons';
 
 const DRAFT_KEY = KEYS.draft;
 
 const isValidDraft = (d) => {
   if (!d || typeof d !== 'object') return false;
-  if (!d.routine || typeof d.routine !== 'object' || !Array.isArray(d.routine.exercises)) return false;
-  if (!Array.isArray(d.log) || d.log.length === 0) return false;
+  if (!d.routine || typeof d.routine !== 'object' || !Array.isArray(d.routine.exercises) || d.routine.exercises.length === 0) return false;
+  if (!Array.isArray(d.log) || d.log.length !== d.routine.exercises.length) return false;
   if (typeof d.exIndex !== 'number' || typeof d.setIndex !== 'number') return false;
   if (d.exIndex < 0 || d.exIndex >= d.log.length || d.setIndex < 0) return false;
   return d.log.every((b) => b && b.ex && Array.isArray(b.sets));
@@ -38,7 +39,12 @@ const TABS = [
   ['settings', 'Ajustes', 'settings', Settings],
 ];
 
-function AnimatedTabIcon({ name, active, id }) {
+function AnimatedTabIcon({ name, active, id, play }) {
+  const color = active ? C.accent : C.mute;
+  if (id === 'home') return <HomeIcon color={color} size={24} play={play} focused={active} />;
+  if (id === 'routines') return <RoutinesIcon color={color} size={24} play={play} focused={active} />;
+  if (id === 'progress') return <ProgressIcon color={color} size={24} play={play} focused={active} />;
+
   const bounce = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -58,21 +64,10 @@ function AnimatedTabIcon({ name, active, id }) {
         }).start();
       });
     }
-  }, [active]);
+  }, [active, play]);
 
   let transform = [];
-  if (id === 'home') {
-    const scale = bounce.interpolate({ inputRange: [0, 1], outputRange: [1, 1.25] });
-    const translateY = bounce.interpolate({ inputRange: [0, 1], outputRange: [0, -4] });
-    transform = [{ scale }, { translateY }];
-  } else if (id === 'routines') {
-    const rotate = bounce.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-22deg'] });
-    const scale = bounce.interpolate({ inputRange: [0, 1], outputRange: [1, 1.2] });
-    transform = [{ scale }, { rotate }];
-  } else if (id === 'progress') {
-    const scale = bounce.interpolate({ inputRange: [0, 1], outputRange: [1, 1.3] });
-    transform = [{ scale }];
-  } else if (id === 'settings') {
+  if (id === 'settings') {
     const rotate = bounce.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '90deg'] });
     const scale = bounce.interpolate({ inputRange: [0, 1], outputRange: [1, 1.2] });
     transform = [{ scale }, { rotate }];
@@ -80,7 +75,7 @@ function AnimatedTabIcon({ name, active, id }) {
 
   return (
     <Animated.View style={{ transform }}>
-      <Ionicons name={active ? name : `${name}-outline`} size={24} color={active ? C.accent : C.mute} />
+      <Ionicons name={active ? name : `${name}-outline`} size={24} color={color} />
     </Animated.View>
   );
 }
@@ -131,8 +126,17 @@ function Shell() {
   const ins = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold });
   const [tab, setTab] = useState('home');
+  const [plays, setPlays] = useState({ home: 0, routines: 0, progress: 0, settings: 0 });
   const [routine, setRoutine] = useState(null);
   const [draft, setDraft] = useState(null);
+
+  const openWorkout = (r) => {
+    if (!r || !Array.isArray(r.exercises) || r.exercises.length === 0) {
+      Dialog.alert('Rutina vacía', 'Agrega al menos un ejercicio antes de empezar el entrenamiento.');
+      return;
+    }
+    setRoutine(r);
+  };
   const [showIntro, setShowIntro] = useState(true);
   const workoutBackRef = useRef(null);
   const scrollRef = useRef(null);
@@ -160,7 +164,7 @@ function Shell() {
         `Tienes "${d.routine.name || 'tu rutina'}" en curso. ¿Qué deseas hacer?`,
         [
           { text: 'Descartar', style: 'destructive', onPress: discard },
-          { text: 'Continuar entreno', onPress: () => { setDraft(d); setRoutine(d.routine); } },
+          { text: 'Continuar entreno', onPress: () => { setDraft(d); openWorkout(d.routine); } },
         ],
         { cancelable: false }
       );
@@ -205,6 +209,7 @@ function Shell() {
           ref={scrollRef}
           horizontal
           pagingEnabled
+          bounces={false}
           showsHorizontalScrollIndicator={false}
           scrollEventThrottle={16}
           decelerationRate="fast"
@@ -250,7 +255,7 @@ function Shell() {
         >
           {TABS.map(([id, , , Comp]) => (
             <View key={id} style={{ width: W, flex: 1 }}>
-              <Comp go={setTab} start={setRoutine} isActive={tab === id} />
+              <Comp go={setTab} start={openWorkout} isActive={tab === id} />
             </View>
           ))}
         </ScrollView>
@@ -260,13 +265,14 @@ function Shell() {
             return (
               <Press key={id} onPress={() => {
                 Vibration.vibrate(12);
+                setPlays((p) => ({ ...p, [id]: (p[id] || 0) + 1 }));
                 setTab(id);
                 const idx = TABS.findIndex((t) => t[0] === id);
                 if (idx !== -1 && scrollRef.current) {
                   scrollRef.current.scrollTo({ x: idx * W, animated: false });
                 }
               }} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 48, paddingVertical: 4 }} hitSlop={8}>
-                <AnimatedTabIcon name={icon} active={on} id={id} />
+                <AnimatedTabIcon name={icon} active={on} id={id} play={plays[id] || 0} />
                 <T style={{ fontSize: 11, marginTop: 3, color: on ? C.accent : C.mute, fontWeight: on ? '700' : '400' }}>{label}</T>
               </Press>
             );

@@ -17,13 +17,19 @@ import RoutineScoresCard from './progress/RoutineScoresCard';
 import HistoryList from './progress/HistoryList';
 import EmptyProgress from './progress/EmptyProgress';
 
-export default function Progress() {
+export default function Progress({ go }) {
   const { data, update } = useStore();
   const ins = useSafeAreaInsets();
   const workouts = data.workouts || [];
 
   const [period, setPeriod] = useState('30 días');
-  const [customRange, setCustomRange] = useState({ desde: '2026-09-01', hasta: '2026-10-31' });
+  const [customRange, setCustomRange] = useState(() => {
+    const hoy = new Date();
+    const desde = new Date(hoy);
+    desde.setDate(hoy.getDate() - 30);
+    const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return { desde: fmt(desde), hasta: fmt(hoy) };
+  });
   const [selectedExId, setSelectedExId] = useState(null);
 
   const hoyMs = Date.now();
@@ -31,14 +37,14 @@ export default function Progress() {
   const stats = periodStats(data, rango, selectedExId);
 
   const handleStartWorkout = () => {
-    // If no routines, prompt or navigate to routines
+    if (typeof go === 'function') go('routines');
   };
 
   if (workouts.length === 0) {
     return (
       <EmptyProgress
         onStartWorkout={handleStartWorkout}
-        onGoRoutines={() => {}}
+        onGoRoutines={handleStartWorkout}
       />
     );
   }
@@ -70,6 +76,7 @@ export default function Progress() {
           setPeriod={setPeriod}
           customRange={customRange}
           setCustomRange={setCustomRange}
+          rango={rango}
         />
       </FadeIn>
 

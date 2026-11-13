@@ -105,6 +105,9 @@ function Editor({ routine, onClose }) {
           name: item.name,
           group: item.group,
           equipment: item.equipment,
+          type: item.type,
+          loadType: item.loadType,
+          custom: item.custom,
           sets: prev.defaults.sets,
           reps: prev.defaults.reps,
           mode: 'default',
@@ -843,7 +846,7 @@ function Editor({ routine, onClose }) {
   );
 }
 
-function RoutineDetail({ routine, onClose, onEdit, onDelete }) {
+function RoutineDetail({ routine, onClose, onEdit, onDelete, onStart }) {
   const estSec = routine.exercises.reduce((acc, ex) => {
     const manual = ex.mode === 'manual';
     const sets = manual ? (Number(ex.sets) || routine.defaults?.sets || 3) : (routine.defaults?.sets || 3);
@@ -948,7 +951,18 @@ function RoutineDetail({ routine, onClose, onEdit, onDelete }) {
           )}
 
           {/* Action Buttons */}
-          <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+          <Btn
+            label="Iniciar entrenamiento"
+            icon="play"
+            disabled={routine.exercises.length === 0}
+            onPress={() => {
+              if (routine.exercises.length === 0) return;
+              onClose();
+              if (onStart) onStart(routine);
+            }}
+            style={{ minHeight: 54, borderRadius: 20, marginTop: 16 }}
+          />
+          <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
             <Btn
               kind="ghost"
               label="Eliminar"
@@ -1119,6 +1133,7 @@ export default function Routines({ start }) {
             onClose={() => setSelectedRoutine(null)}
             onEdit={(r) => setEditingRoutine(r)}
             onDelete={del}
+            onStart={start}
           />
         )}
         {editingRoutine && <Editor routine={editingRoutine} onClose={() => setEditingRoutine(null)} />}
