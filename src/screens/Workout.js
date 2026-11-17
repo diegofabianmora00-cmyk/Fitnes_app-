@@ -1042,8 +1042,8 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
                   <T style={{ fontSize: 13, color: C.mute }}>Peso ({loadTypeLabels[rec.loadType || cur.ex.loadType] || 'Peso'})</T>
                   <UnitToggle unit={u} onChange={setUnit} />
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: 10, marginTop: 2 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
                         <T style={{ fontSize: 38, fontWeight: '700', letterSpacing: -1.1, fontVariant: ['tabular-nums'], opacity: regConfirmed.w ? 1 : 0.4 }}>{reg.w.toString().replace('.', ',')}</T>
@@ -1056,14 +1056,14 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
                         if (!recWKg || recWKg <= 0) return null;
                         const recWDisp = Math.round(toU(recWKg, u) * 10) / 10;
                         return (
-                          <T style={{ fontSize: 13, color: C.mute, fontWeight: '500' }}>
+                          <T style={{ fontSize: 13, color: C.mute, fontWeight: '500', flexShrink: 1 }}>
                             Recomendado: {recWDisp} {u}
                           </T>
                         );
                       })()}
                     </View>
                   </View>
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <View style={{ flexDirection: 'row', gap: 8, flexShrink: 0 }}>
                     <Press onPress={() => { setRegConfirmed((c) => ({ ...c, w: true })); setReg((p) => ({ ...p, w: String(subLoadStep(parseFloat(String(p.w).replace(',', '.')) || 0, u)) })); }} hitSlop={6} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: C.stepBtn, alignItems: 'center', justifyContent: 'center' }}>
                       <Ionicons name="remove" size={22} color={C.text} />
                     </Press>
