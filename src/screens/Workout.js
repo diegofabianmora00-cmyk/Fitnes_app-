@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Defs, LinearGradient as SvgGrad, Stop } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C } from '../theme';
-import { Btn, Card, Field, Press, T } from '../ui';
+import { Btn, Card, Field, Press, T, UnitToggle } from '../ui';
 import { fromU, KEYS, lastSets, toU, uid, useStore } from '../store';
 import { loadTypeLabels, plateBreakdown, GYM_DEFAULT } from '../load';
 import { exerciseById } from '../exercises';
@@ -22,6 +22,13 @@ import { Dialog } from '../Dialog';
 const mm = (s) => `${Math.floor(s / 60)}:${String(Math.abs(Math.floor(s)) % 60).padStart(2, '0')}`;
 
 const targetRir = (rec) => (Array.isArray(rec.rir) ? (rec.rir[1] ?? rec.rir[0] ?? 2) : 2);
+
+const dispToKg = (value, unit) => fromU(roundLoad(parseFloat(String(value ?? '').replace(',', '.')) || 0, unit), unit);
+
+const setsToKg = (sets, unit) => (sets || []).map((s) => ({
+  ...s,
+  w: dispToKg(s.w, unit),
+}));
 
 const lastRestSec = (sets, index, startedAtTs) => {
   for (let i = index - 1; i >= 0; i--) {
@@ -181,7 +188,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
     const alert = evaluateSession({
       currentExerciseIndex: exIndex,
       currentSetIndex: setIndex,
-      exercisesPerformed: log.map((b) => ({ sets: b.sets, targetReps: b.rec.targetReps || b.ex.reps })),
+      exercisesPerformed: log.map((b) => ({ sets: setsToKg(b.sets, u), targetReps: b.rec.targetReps || b.ex.reps, loadType: b.rec.loadType || b.ex.loadType, recWeightKg: b.rec.weightKg })),
       pain: painStop,
       daysSinceLastSession,
       alertHistory,
@@ -189,7 +196,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
       unit: u,
     }, routine.exercises, data.profile, data.workouts);
     setSessionAlert(alert);
-  }, [exIndex, setIndex, log, painStop, alertHistory, setsSinceLastAlert, phase]);
+  }, [exIndex, setIndex, log, painStop, alertHistory, setsSinceLastAlert, phase, u, routine.exercises, data.profile, data.workouts]);
 
   const applySessionAlert = (alertArg) => {
     const a = alertArg || sessionAlert;
@@ -548,7 +555,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
     const plan = nextSetPlan({
       data,
       ex: cur.ex,
-      sets: nextSets,
+      sets: setsToKg(nextSets, u),
       setIndex,
       totalSets,
       startPlan: (rec.setPlans && rec.setPlans[0]) || {
@@ -717,21 +724,46 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
     targetRestSec: rec.restSec,
     targetRir: targetRir(rec),
     recWeightKg: rec.weightKg,
-    sets: cur.sets,
+    sets: setsToKg(cur.sets, u),
   }) : null;
 
   const bodyKg = Number(data.profile && data.profile.weightKg) || 0;
 
+  const setUnit = (nextU) => {
+    if (!nextU || nextU === u) return;
+    const prevU = u;
+    const convertDisp = (w) => {
+      const n = parseFloat(String(w ?? '').replace(',', '.'));
+      if (!(n > 0)) return w || '';
+      return String(roundLoad(toU(fromU(n, prevU), nextU), nextU));
+    };
+    setLog((prev) => prev.map((b) => ({
+      ...b,
+      sets: b.sets.map((s) => ({ ...s, w: convertDisp(s.w) })),
+    })));
+    setReg((p) => ({ ...p, w: convertDisp(p.w) }));
+    if (editingNext) {
+      setEditW((v) => convertDisp(v));
+      setEditR((v) => v);
+    }
+    update((d) => ({ ...d, unit: nextU }));
+  };
+
   const renderHeader = (title, subtitle, segments) => (
-    <View style={{ backgroundColor: C.card, borderRadius: 18, paddingVertical: 12, paddingHorizontal: 16, borderWidth: 1, borderColor: C.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-      <View style={{ flex: 1, paddingRight: 8 }}>
-        <T style={{ fontSize: 17, fontWeight: '600' }}>{title}</T>
-        <T style={{ fontSize: 13, color: C.mute, marginTop: 2 }}>{subtitle}</T>
-      </View>
-      <View style={{ flexDirection: 'row', gap: 5 }}>
-        {Array.from({ length: segments }).map((_, i) => (
-          <View key={i} style={{ width: 22, height: 6, borderRadius: 3, backgroundColor: i < (phase === 'rest' ? completedSets : setIndex + 1) ? C.accent : C.segmentOff }} />
-        ))}
+    <View style={{ backgroundColor: C.card, borderRadius: 18, paddingVertical: 12, paddingHorizontal: 16, borderWidth: 1, borderColor: C.line }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <View style={{ flex: 1, paddingRight: 8 }}>
+          <T style={{ fontSize: 17, fontWeight: '600' }}>{title}</T>
+          <T style={{ fontSize: 13, color: C.mute, marginTop: 2 }}>{subtitle}</T>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View style={{ flexDirection: 'row', gap: 5 }}>
+            {Array.from({ length: segments }).map((_, i) => (
+              <View key={i} style={{ width: 22, height: 6, borderRadius: 3, backgroundColor: i < (phase === 'rest' ? completedSets : setIndex + 1) ? C.accent : C.segmentOff }} />
+            ))}
+          </View>
+          <UnitToggle unit={u} onChange={setUnit} />
+        </View>
       </View>
     </View>
   );
@@ -1006,21 +1038,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
               <View style={{ backgroundColor: C.card, borderRadius: 26, paddingVertical: 12, paddingHorizontal: 18, borderWidth: 1, borderColor: C.line }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                   <T style={{ fontSize: 13, color: C.mute }}>Peso ({loadTypeLabels[rec.loadType || cur.ex.loadType] || 'Peso'})</T>
-                  <Press
-                    onPress={() => {
-                      const nextU = u === 'kg' ? 'lb' : 'kg';
-                      const curW = parseFloat(String(reg.w).replace(',', '.')) || 0;
-                      const convertedW = nextU === 'lb' ? curW * 2.20462 : curW / 2.20462;
-                      setReg((p) => ({ ...p, w: curW > 0 ? String(Math.round(convertedW * 10) / 10) : p.w }));
-                      update((d) => ({ ...d, unit: nextU }));
-                    }}
-                    style={{ backgroundColor: C.card2, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Ionicons name="swap-horizontal" size={13} color={C.accent} />
-                      <T style={{ fontSize: 11, fontWeight: '700', color: C.accent }}>Cambiar a {u === 'kg' ? 'lb' : 'kg'}</T>
-                    </View>
-                  </Press>
+                  <UnitToggle unit={u} onChange={setUnit} />
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                   <View>

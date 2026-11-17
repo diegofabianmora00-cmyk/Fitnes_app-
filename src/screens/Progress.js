@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C } from '../theme';
-import { FadeIn, H, T } from '../ui';
+import { FadeIn, H, T, UnitToggle } from '../ui';
 import { useStore } from '../store';
 import { periodRange, periodStats } from '../recommend';
 
@@ -60,9 +60,12 @@ export default function Progress({ go }) {
       scrollEventThrottle={16}
     >
       <FadeIn>
-        <View style={{ marginBottom: 4 }}>
-          <H>Progreso</H>
-          <T mute style={{ fontSize: 14, marginTop: 2 }}>{periodSubtitle}</T>
+        <View style={{ marginBottom: 4, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+          <View style={{ flex: 1 }}>
+            <H>Progreso</H>
+            <T mute style={{ fontSize: 14, marginTop: 2 }}>{periodSubtitle}</T>
+          </View>
+          <UnitToggle unit={data.unit || 'kg'} onChange={(u) => update((d) => ({ ...d, unit: u }))} style={{ marginTop: 4 }} />
         </View>
       </FadeIn>
 

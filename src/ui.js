@@ -80,3 +80,16 @@ export const Field = ({ style, ...p }) => (
   <TextInput placeholderTextColor={C.mute} selectionColor={C.accent}
     style={[{ backgroundColor: C.card2, color: C.text, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, fontSize: 16, fontFamily: 'Inter_400Regular' }, style]} {...p} />
 );
+
+export const UnitToggle = ({ unit = 'kg', onChange, style }) => (
+  <View style={[{ flexDirection: 'row', backgroundColor: C.card2, borderRadius: 12, padding: 3, borderWidth: 1, borderColor: C.line }, style]}>
+    {['kg', 'lb'].map((u) => {
+      const on = unit === u;
+      return (
+        <Press key={u} onPress={() => onChange && onChange(u)} style={{ minWidth: 40, minHeight: 34, paddingHorizontal: 10, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? C.accent : 'transparent' }}>
+          <Text style={{ color: on ? C.accentText : C.mute, fontWeight: '700', fontSize: 12, fontFamily: 'Inter_700Bold' }}>{u.toUpperCase()}</Text>
+        </Press>
+      );
+    })}
+  </View>
+);

@@ -171,12 +171,12 @@ export const migrate = (raw) => {
       metCode: e.metCode || '02054',
       custom: true,
     }));
-  const workouts = (base.workouts || [])
+  const workouts = healWorkoutWeights((base.workouts || [])
     .map((w) => ({
       ...w,
       exercises: (w.exercises || []).map(normalizeWorkoutExercise),
     }))
-    .sort((a, b) => (b.date || 0) - (a.date || 0));
+    .sort((a, b) => (b.date || 0) - (a.date || 0)));
   return rescoreWorkouts({ ...base, schemaVersion: 6, routines, customExercises, workouts, gym: base.gym });
 };
 
@@ -290,4 +290,37 @@ export function lastSets(data, exId) {
     if (sets.length) return sets;
   }
   return [];
+}
+
+export function healWorkoutWeights(workouts = []) {
+  const near = (a, b, tol = 0.35) => Math.abs((Number(a) || 0) - (Number(b) || 0)) <= tol;
+  const healGuide = (g, sW) => {
+    if (!g || typeof g !== 'object') return g || null;
+    const gw = Number(g.weightKg);
+    if (!(gw > 0) || !(sW > 0)) return g;
+    if (near(gw, sW * KG) && !near(gw, sW)) return { ...g, weightKg: gw / KG };
+    return g;
+  };
+  return (workouts || []).map((w) => ({
+    ...w,
+    exercises: (w.exercises || []).map((e) => ({
+      ...e,
+      sets: (e.sets || []).map((s) => {
+        const wKg = Number(s.w);
+        let g = s.guide || null;
+        const gKg = g && Number.isFinite(Number(g.weightKg)) ? Number(g.weightKg) : null;
+        if (!(wKg > 0)) return { ...s, guide: healGuide(g, wKg) };
+        const asKgIfLb = wKg / KG;
+        // Caso común de doble conversión: se guardó un valor de display en lb como si fuera kg
+        // (ej. 110 lb guardado como 110 kg, guía coherente con ~110 kg).
+        if (gKg != null && gKg > 0 && near(wKg, gKg * KG) && !near(wKg, gKg)) {
+          return { ...s, w: asKgIfLb, guide: { ...g, weightKg: asKgIfLb } };
+        }
+        if (gKg != null && gKg > 0 && near(gKg, wKg) && wKg > 120 && wKg / KG <= 120) {
+          return { ...s, w: asKgIfLb, guide: { ...g, weightKg: asKgIfLb } };
+        }
+        return { ...s, guide: healGuide(g, wKg) };
+      }),
+    })),
+  }));
 }

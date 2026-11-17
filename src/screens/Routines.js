@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, ScrollView, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C } from '../theme';
-import { Btn, Card, FadeIn, Field, H, Press, T } from '../ui';
+import { Btn, Card, FadeIn, Field, H, Press, T, UnitToggle } from '../ui';
 import { uid, useStore, routinesForDay } from '../store';
 import { GROUPS, filterExercises } from '../exercises';
 import { GOALS } from '../recommend';
@@ -1007,7 +1007,10 @@ export default function Routines({ start }) {
         <Card style={{ marginBottom: 16 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <View style={{ flex: 1, marginRight: 12 }}>
-              <T style={{ fontSize: 20, fontWeight: '700' }}>Mis rutinas</T>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <T style={{ fontSize: 20, fontWeight: '700' }}>Mis rutinas</T>
+                <UnitToggle unit={data.unit || 'kg'} onChange={(u) => update((d) => ({ ...d, unit: u }))} />
+              </View>
               <T mute style={{ fontSize: 14, marginTop: 2 }}>
                 {totalRoutines > 0 ? `${activeDaysCount} días con rutina · ${totalRoutines} ${totalRoutines === 1 ? 'rutina' : 'rutinas'}` : 'Sin rutinas configuradas'}
               </T>
