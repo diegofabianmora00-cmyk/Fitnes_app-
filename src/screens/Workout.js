@@ -208,7 +208,8 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
       setPhase('summary');
     }
     if (stateOut.addRestSec) {
-      setRestTarget((v) => Math.max(1, Number(v) || 0) + Number(stateOut.addRestSec));
+      const base = (log[exIndex] && log[exIndex].rec && log[exIndex].rec.restSec) || (log[exIndex] && log[exIndex].ex && log[exIndex].ex.restSec) || 90;
+      setRestTarget(base);
       setRestStarted(Date.now());
     }
     if (next) {
@@ -552,6 +553,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
     };
     const nextSets = cur.sets.map((x, i) => (i === setIndex ? savedSet : x));
     const nextSet = setIndex + 1;
+    const baseRest = rec.restSec || cur.ex.restSec || 90;
     const plan = nextSetPlan({
       data,
       ex: cur.ex,
@@ -562,9 +564,9 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
         weightKg: rec.weightKg,
         reps: rec.targetReps,
         rir: targetRir(rec),
-        restSec: rec.restSec,
+        restSec: baseRest,
       },
-      restTarget: restTarget || rec.restSec,
+      restTarget: baseRest,
       gym: data.gym,
     });
     const prevGuide = (cur.sets[nextSet] && cur.sets[nextSet].guide) || s.guide || {};
@@ -600,7 +602,7 @@ export default function Workout({ routine, onClose, workoutBackRef, draft }) {
     setSetsSinceLastAlert((prev) => prev + 1);
     if (nextSet < totalSets) {
       setSetIndex(nextSet);
-      setRestTarget(plan.restSec || rec.restSec || 90);
+      setRestTarget(baseRest);
       setRestStarted(endedAtTs);
       setPhase('rest');
     } else {
