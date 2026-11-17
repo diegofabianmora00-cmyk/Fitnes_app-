@@ -20,6 +20,12 @@ instalada, muestra el aviso con el botón "Actualizar ahora" y el botón
    - `notes`: un resumen corto de los cambios.
 5. Haz commit y push de `app.json` y `update.json`.
 
+> Para que la actualización se instale encima de la anterior sin borrar datos, el
+> nuevo APK debe tener **mayor `android.versionCode`** y estar firmado con las
+> **mismas credenciales de Android** (mismo keystore) que la app ya instalada. Si
+> cambian las credenciales o instalas un APK firmado distinto, Android pedirá
+> desinstalar. En EAS usa las mismas credenciales del proyecto (`eas credentials`).
+
 El botón "Actualizar ahora" descarga el APK dentro de la app y abre el instalador
 de Android. Necesita el permiso `REQUEST_INSTALL_PACKAGES` (ya está en `app.json`).
 La primera vez que se pasa de una versión anterior a la 1.1.2 hay que instalar el

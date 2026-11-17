@@ -62,19 +62,14 @@ export async function downloadAndInstallUpdate(url, onProgress, onTask) {
   if (!file) return { ok: false, canceled: true };
 
   try {
-    await file.preview({ mimeType: 'application/vnd.android.package-archive' });
+    const contentUri = await getContentUriAsync(file.uri);
+    await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+      data: contentUri,
+      flags: 1 | 268435456,
+      type: 'application/vnd.android.package-archive',
+    });
     return { ok: true };
   } catch (e) {
-    try {
-      const contentUri = await getContentUriAsync(file.uri);
-      await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
-        data: contentUri,
-        type: 'application/vnd.android.package-archive',
-        flags: 1,
-      });
-      return { ok: true };
-    } catch (e2) {
-      return { ok: false, error: e2 };
-    }
+    return { ok: false, error: e };
   }
 }

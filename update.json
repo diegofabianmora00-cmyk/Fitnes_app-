@@ -1,5 +1,5 @@
 {
-  "version": "1.1.3",
-  "downloadUrl": "https://expo.dev/artifacts/eas/vDlYJv8VpDQRBwtKnjqo1o6xCZr9eF67WRLMnYS9eT8.apk",
-  "notes": "Mejoras en el entrenamiento en vivo, monitor de sesión y progreso."
+  "version": "1.1.4",
+  "downloadUrl": "https://expo.dev/artifacts/eas/D_cD98qbuw1u0MYJxUDrIiI8bCm0H4YOAR-v4ZqgLIs.apk",
+  "notes": "Corrección del instalador de actualizaciones para que se pueda instalar sin desinstalar la app, y mejoras generales."
 }
